@@ -1,0 +1,127 @@
+services:
+  node1:
+    container_name: node1
+    hostname: node1
+    image: bitcoin:antithesis
+    build:
+      context: ../../../images/bitcoin
+      dockerfile: Dockerfile
+      network: host
+      args:
+        - BITCOIN_BRANCH=master
+    command:
+      - "-regtest"
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-addnode=node2:18444"
+      - "-addnode=node3:18444"
+      - "-dbcache=4"
+      - "-maxmempool=5"
+      - "-loglevelalways"
+    volumes:
+      - ./volumes/node1:/data
+
+  node2:
+    container_name: node2
+    hostname: node2
+    image: bitcoin:antithesis
+    build:
+      context: ../../../images/bitcoin
+      dockerfile: Dockerfile
+      network: host
+      args:
+        - BITCOIN_BRANCH=master
+    command:
+      - "-regtest"
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-addnode=node1:18444"
+      - "-addnode=node3:18444"
+      - "-maxmempool=5"
+      - "-prune=1"
+      - "-dbcache=4"
+      - "-fastprune"
+      - "-loglevelalways"
+    volumes:
+      - ./volumes/node2:/data
+
+  node3:
+    container_name: node3
+    hostname: node3
+    image: bitcoin-pr31132:antithesis
+    build:
+      context: ../../../images/bitcoin
+      dockerfile: Dockerfile
+      network: host
+      args:
+        BITCOIN_REPO: https://github.com/andrewtoth/bitcoin
+        BITCOIN_BRANCH: "threaded-inputs"
+    command:
+      - "-regtest"
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-addnode=node1:18444"
+      - "-addnode=node2:18444"
+      - "-maxmempool=5"
+      - "-dbcache=4"
+      - "-loglevelalways"
+    volumes:
+      - ./volumes/node3:/data
+
+  # Health checker waits for nodes and signals setup_complete
+  health-checker:
+    container_name: health-checker
+    hostname: health-checker
+    image: initial-rpc-workload-workload:antithesis
+    build:
+      context: ../workload
+      dockerfile: Dockerfile
+      network: host
+    entrypoint: ["/health_checker"]
+    depends_on:
+      - node1
+      - node2
+      - node3
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - NODE2_RPC_URL=http://user:password@node2:18443
+      - NODE3_RPC_URL=http://user:password@node3:18443
+
+  # Workload container with test drivers (invoked by Antithesis)
+  workload:
+    container_name: workload
+    hostname: workload
+    image: initial-rpc-workload-workload:antithesis
+    build:
+      context: ../workload
+      dockerfile: Dockerfile
+      network: host
+    depends_on:
+      - node1
+      - node2
+      - node3
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - NODE2_RPC_URL=http://user:password@node2:18443
+      - NODE3_RPC_URL=http://user:password@node3:18443

@@ -1,0 +1,82 @@
+[package]
+name = "bitcoin-antithesis-workload"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+antithesis_sdk = "0.2"
+jsonrpc = "0.18"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "parallel_driver_tx_simple"
+path = "src/bin/parallel_driver_tx_simple.rs"
+
+[[bin]]
+name = "parallel_driver_tx_cross_node"
+path = "src/bin/parallel_driver_tx_cross_node.rs"
+
+[[bin]]
+name = "parallel_driver_tx_sendmany"
+path = "src/bin/parallel_driver_tx_sendmany.rs"
+
+[[bin]]
+name = "parallel_driver_tx_rbf"
+path = "src/bin/parallel_driver_tx_rbf.rs"
+
+[[bin]]
+name = "parallel_driver_tx_addr_types"
+path = "src/bin/parallel_driver_tx_addr_types.rs"
+
+[[bin]]
+name = "parallel_driver_tx_raw"
+path = "src/bin/parallel_driver_tx_raw.rs"
+
+[[bin]]
+name = "parallel_driver_tx_consolidate"
+path = "src/bin/parallel_driver_tx_consolidate.rs"
+
+[[bin]]
+name = "parallel_driver_blocks"
+path = "src/bin/parallel_driver_blocks.rs"
+
+[[bin]]
+name = "eventually_consistency"
+path = "src/bin/eventually_consistency.rs"
+
+[[bin]]
+name = "health_checker"
+path = "src/bin/health_checker.rs"
+
+[[bin]]
+name = "anytime_gettxoutsetinfo"
+path = "src/bin/anytime_gettxoutsetinfo.rs"
+
+[[bin]]
+name = "anytime_getblocktemplate"
+path = "src/bin/anytime_getblocktemplate.rs"
+
+[[bin]]
+name = "parallel_driver_prioritise_tx"
+path = "src/bin/parallel_driver_prioritise_tx.rs"
+
+[[bin]]
+name = "anytime_abandontransaction"
+path = "src/bin/anytime_abandontransaction.rs"
+
+[[bin]]
+name = "anytime_loadwallet"
+path = "src/bin/anytime_loadwallet.rs"
+
+[[bin]]
+name = "anytime_unloadwallet"
+path = "src/bin/anytime_unloadwallet.rs"
+
+[[bin]]
+name = "anytime_pruneblockchain"
+path = "src/bin/anytime_pruneblockchain.rs"
+
+[[bin]]
+name = "serial_driver_tx_bulkdata"
+path = "src/bin/serial_driver_tx_bulkdata.rs"

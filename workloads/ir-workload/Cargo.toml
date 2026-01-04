@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "fuzzamoto",
+    "fuzzamoto-ir",
+    "ir-builder",
+    "workload",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["Bitcoin Antithesis Team"]
+license = "MIT"
+repository = "https://github.com/bitcoin-antithesis"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+all = "warn"

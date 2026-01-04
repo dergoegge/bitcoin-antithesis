@@ -1,0 +1,108 @@
+[package]
+name = "ir-workload"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+antithesis_sdk = "0.2"
+fuzzamoto-ir = { path = "../fuzzamoto-ir" }
+hex = "0.4"
+jsonrpc = "0.18"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "health_checker"
+path = "src/bin/health_checker.rs"
+
+[[bin]]
+name = "serial_driver_single_tx_generator"
+path = "src/bin/serial_driver_single_tx_generator.rs"
+
+[[bin]]
+name = "serial_driver_get_data_generator"
+path = "src/bin/serial_driver_get_data_generator.rs"
+
+[[bin]]
+name = "serial_driver_input_mutator"
+path = "src/bin/serial_driver_input_mutator.rs"
+
+[[bin]]
+name = "serial_driver_operation_mutator"
+path = "src/bin/serial_driver_operation_mutator.rs"
+
+[[bin]]
+name = "serial_driver_compile"
+path = "src/bin/serial_driver_compile.rs"
+
+[[bin]]
+name = "serial_driver_txo_generator"
+path = "src/bin/serial_driver_txo_generator.rs"
+
+[[bin]]
+name = "serial_driver_header_generator"
+path = "src/bin/serial_driver_header_generator.rs"
+
+[[bin]]
+name = "serial_driver_one_parent_one_child_generator"
+path = "src/bin/serial_driver_one_parent_one_child_generator.rs"
+
+[[bin]]
+name = "serial_driver_long_chain_generator"
+path = "src/bin/serial_driver_long_chain_generator.rs"
+
+[[bin]]
+name = "serial_driver_large_tx_generator"
+path = "src/bin/serial_driver_large_tx_generator.rs"
+
+[[bin]]
+name = "serial_driver_send_block_generator"
+path = "src/bin/serial_driver_send_block_generator.rs"
+
+[[bin]]
+name = "serial_driver_block_generator"
+path = "src/bin/serial_driver_block_generator.rs"
+
+[[bin]]
+name = "serial_driver_inventory_generator"
+path = "src/bin/serial_driver_inventory_generator.rs"
+
+[[bin]]
+name = "serial_driver_compact_block_generator"
+path = "src/bin/serial_driver_compact_block_generator.rs"
+
+[[bin]]
+name = "serial_driver_compact_filter_query_generator"
+path = "src/bin/serial_driver_compact_filter_query_generator.rs"
+
+[[bin]]
+name = "serial_driver_bloom_filter_load_generator"
+path = "src/bin/serial_driver_bloom_filter_load_generator.rs"
+
+[[bin]]
+name = "serial_driver_bloom_filter_add_generator"
+path = "src/bin/serial_driver_bloom_filter_add_generator.rs"
+
+[[bin]]
+name = "serial_driver_bloom_filter_clear_generator"
+path = "src/bin/serial_driver_bloom_filter_clear_generator.rs"
+
+[[bin]]
+name = "serial_driver_addr_relay_generator"
+path = "src/bin/serial_driver_addr_relay_generator.rs"
+
+[[bin]]
+name = "serial_driver_addr_relay_v2_generator"
+path = "src/bin/serial_driver_addr_relay_v2_generator.rs"
+
+[[bin]]
+name = "serial_driver_get_addr_generator"
+path = "src/bin/serial_driver_get_addr_generator.rs"
+
+[[bin]]
+name = "serial_driver_send_message_generator"
+path = "src/bin/serial_driver_send_message_generator.rs"
+
+[[bin]]
+name = "eventually_consistent"
+path = "src/bin/eventually_consistent.rs"

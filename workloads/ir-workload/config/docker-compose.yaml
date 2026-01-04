@@ -1,0 +1,112 @@
+services:
+  node1:
+    container_name: node1
+    hostname: node1
+    image: bitcoin:antithesis
+    build:
+      context: ../../../images/bitcoin
+      dockerfile: Dockerfile
+      network: host
+    command:
+      - "-regtest"
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-maxmempool=5"
+      - "-par=4"
+      - "-rpcthreads=4"
+      - "-addnode=node2:18444"
+      - "-dbcache=4"
+      - "-loglevelalways=1"
+      - "-peertimeout=999999999"
+    volumes:
+      - ./volumes/node1:/data
+
+  node2:
+    container_name: node2
+    hostname: node2
+    image: bitcoin:antithesis
+    build:
+      context: ../../../images/bitcoin
+      dockerfile: Dockerfile
+      network: host
+    command:
+      - "-regtest"
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-addnode=node1:18444"
+      - "-maxmempool=5"
+      - "-par=4"
+      - "-rpcthreads=4"
+      - "-dbcache=4"
+      - "-loglevelalways=1"
+      - "-peertimeout=999999999"
+    volumes:
+      - ./volumes/node2:/data
+
+  ir-builder:
+    container_name: ir-builder
+    hostname: ir-builder
+    image: ir-workload-ir-builder:antithesis
+    build:
+      context: ..
+      dockerfile: ir-builder/Dockerfile
+      network: host
+    depends_on:
+      - node1
+      - node2
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - NODE2_RPC_URL=http://user:password@node2:18443
+      - NODE1_P2P_ADDR=node1:18444
+      - NODE2_P2P_ADDR=node2:18444
+
+  health-checker:
+    container_name: health-checker
+    hostname: health-checker
+    image: ir-workload-workload:antithesis
+    build:
+      context: ..
+      dockerfile: workload/Dockerfile
+      network: host
+    entrypoint: ["/health_checker"]
+    depends_on:
+      - node1
+      - node2
+      - ir-builder
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - NODE2_RPC_URL=http://user:password@node2:18443
+      - IR_BUILDER_HOST=ir-builder
+      - IR_BUILDER_PORT=9000
+
+  workload:
+    container_name: workload
+    hostname: workload
+    image: ir-workload-workload:antithesis
+    build:
+      context: ..
+      dockerfile: workload/Dockerfile
+      network: host
+    depends_on:
+      - node1
+      - node2
+      - ir-builder
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - NODE2_RPC_URL=http://user:password@node2:18443
+      - IR_BUILDER_HOST=ir-builder
+      - IR_BUILDER_PORT=9000
