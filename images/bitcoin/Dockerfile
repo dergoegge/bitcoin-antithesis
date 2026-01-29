@@ -55,13 +55,16 @@ RUN sed -i --regexp-extended '/.*rm -rf .*extract_dir.*/d' ./bitcoin/depends/fun
       AR=llvm-ar-${LLVM_V} NM=llvm-nm-${LLVM_V} RANLIB=llvm-ranlib-${LLVM_V} STRIP=llvm-strip-${LLVM_V} \
       -j$(nproc)
 
-# Configure and build Bitcoin Core with Antithesis instrumentation
-RUN cmake -S bitcoin/ -B bitcoin/build \
-	--toolchain depends/$(./bitcoin/depends/config.guess)/toolchain.cmake \
+ARG USE_TSAN=0
+RUN if [ "$USE_TSAN" -eq "1" ]; then \
+     export SANITIZERS="thread"; \
+     fi && cmake -S bitcoin/ -B bitcoin/build \
+     --toolchain depends/$(./bitcoin/depends/config.guess)/toolchain.cmake \
     -DAPPEND_CPPFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -DABORT_ON_FAILED_ASSUME" \
     -DAPPEND_CXXFLAGS="-fsanitize-coverage=trace-pc-guard -g -include /src/bitcoin/src/antithesis_instrumentation.h" \
     -DAPPEND_CFLAGS="-fsanitize-coverage=trace-pc-guard -g -include /src/bitcoin/src/antithesis_instrumentation.h" \
-    -DAPPEND_LDFLAGS="-fuse-ld=lld-${LLVM_V} -Wl,-z,muldefs,--build-id"
+    -DAPPEND_LDFLAGS="-fuse-ld=lld-${LLVM_V} -Wl,-z,muldefs,--build-id" \
+    -DSANITIZERS="$SANITIZERS"
 
 RUN cmake --build /src/bitcoin/build -j$(nproc) --target bitcoind
 RUN cmake --build /src/bitcoin/build -j$(nproc) --target bitcoin-cli
@@ -78,6 +81,7 @@ RUN apt-get update && apt-get install -y \
 # Copy bitcoind binary
 COPY --from=builder /src/bitcoin/build/bin/bitcoind /usr/local/bin/bitcoind
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-cli /usr/local/bin/bitcoin-cli
+COPY --from=builder /src/bitcoin/test/sanitizer_suppressions/tsan ./tsan.supp
 
 # Create symbols directory for Antithesis
 RUN mkdir -p /symbols
@@ -92,6 +96,7 @@ RUN mkdir -p /data
 # Expose ports (P2P and RPC)
 EXPOSE 18444 18443
 
+ENV TSAN_OPTIONS="suppressions=/tsan.supp"
 # Default entrypoint
 ENTRYPOINT ["bitcoind"]
 CMD ["-regtest", "-datadir=/data", "-rpcallowip=0.0.0.0/0", "-rpcbind=0.0.0.0", "-rpcuser=user", "-rpcpassword=password", "-server=1", "-listen=1", "-listenonion=0", "-fallbackfee=0.0001"]

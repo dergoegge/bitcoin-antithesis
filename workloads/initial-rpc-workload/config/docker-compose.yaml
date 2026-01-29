@@ -9,6 +9,7 @@ services:
       network: host
       args:
         - BITCOIN_BRANCH=master
+        - USE_TSAN=1
     command:
       - "-regtest"
       - "-datadir=/data"
