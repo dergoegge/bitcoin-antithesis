@@ -26,6 +26,8 @@ services:
       - "-dbcache=4"
       - "-maxmempool=5"
       - "-loglevelalways"
+      - "-printtoconsole=0"
+      - "-debug"
     volumes:
       - ./volumes/node1:/data
 
@@ -57,6 +59,8 @@ services:
       - "-dbcache=4"
       - "-fastprune"
       - "-loglevelalways"
+      - "-printtoconsole=0"
+      - "-debug"
     volumes:
       - ./volumes/node2:/data
 
@@ -87,6 +91,8 @@ services:
       - "-maxmempool=5"
       - "-dbcache=4"
       - "-loglevelalways"
+      - "-printtoconsole=0"
+      - "-debug"
     volumes:
       - ./volumes/node3:/data
 
