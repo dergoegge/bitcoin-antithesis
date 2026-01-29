@@ -14,6 +14,7 @@ fn main() {
 
     for attempt in 1..=40 {
         block_hashes.clear();
+        block_heights.clear();
         let mut all_reachable = true;
 
         for (i, node_config) in nodes.iter().enumerate() {
