@@ -2,14 +2,14 @@ services:
   node1:
     container_name: node1
     hostname: node1
-    image: bitcoin:antithesis
+    image: bitcoin-tsan:antithesis
     build:
       context: ../../../images/bitcoin
       dockerfile: Dockerfile
       network: host
       args:
         - BITCOIN_BRANCH=master
-        - USE_TSAN=1
+        - SANITIZERS=thread
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -41,6 +41,7 @@ services:
       network: host
       args:
         - BITCOIN_BRANCH=master
+        - SANITIZERS=
     command:
       - "-regtest"
       - "-datadir=/data"
