@@ -86,7 +86,11 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /src/bitcoin/build/bin/bitcoind /usr/local/bin/bitcoind
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-cli /usr/local/bin/bitcoin-cli
 COPY --from=builder /src/bitcoin/test/sanitizer_suppressions/tsan ./tsan.supp
+
+# Add additional suppressions for Antithesis
 RUN echo "race:/src/bitcoin/src/antithesis_instrumentation.h" >> ./tsan.supp
+RUN echo "signal:HandleSIGTERM" >> ./tsan.supp
+
 # Copy llvm-symbolizer and its dependencies
 COPY --from=builder /usr/bin/llvm-symbolizer-21 /usr/bin/llvm-symbolizer
 COPY --from=builder /symbolizer-libs/ /usr/lib/
