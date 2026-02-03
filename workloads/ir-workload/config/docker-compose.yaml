@@ -24,6 +24,10 @@ services:
       - "-addnode=node2:18444"
       - "-dbcache=4"
       - "-loglevelalways=1"
+      - "-debug"
+      - "-debugexclude=libevent"
+      - "-debugexclude=leveldb"
+      - "-printtoconsole=0"
       - "-peertimeout=999999999"
     volumes:
       - ./volumes/node1:/data
@@ -53,6 +57,10 @@ services:
       - "-rpcthreads=4"
       - "-dbcache=4"
       - "-loglevelalways=1"
+      - "-debug"
+      - "-debugexclude=libevent"
+      - "-debugexclude=leveldb"
+      - "-printtoconsole=0"
       - "-peertimeout=999999999"
     volumes:
       - ./volumes/node2:/data
