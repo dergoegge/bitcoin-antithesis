@@ -37,7 +37,7 @@ COPY --from=builder /build/target/release/anytime_abandontransaction /opt/antith
 COPY --from=builder /build/target/release/anytime_loadwallet /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_unloadwallet /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_pruneblockchain /opt/antithesis/test/v1/main/
-COPY --from=builder /build/target/release/serial_driver_tx_bulkdata /opt/antithesis/test/v1/main/
+#COPY --from=builder /build/target/release/serial_driver_tx_bulkdata /opt/antithesis/test/v1/main/
 
 # Copy health checker to root (not a test driver)
 COPY --from=builder /build/target/release/health_checker /health_checker

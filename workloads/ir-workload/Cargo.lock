@@ -403,6 +403,7 @@ name = "ir-builder"
 version = "0.1.0"
 dependencies = [
  "antithesis_sdk",
+ "bitcoin",
  "fuzzamoto",
  "fuzzamoto-ir",
  "jsonrpc",

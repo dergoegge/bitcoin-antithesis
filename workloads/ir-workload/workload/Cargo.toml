@@ -64,6 +64,10 @@ name = "serial_driver_block_generator"
 path = "src/bin/serial_driver_block_generator.rs"
 
 [[bin]]
+name = "serial_driver_tip_block_generator"
+path = "src/bin/serial_driver_tip_block_generator.rs"
+
+[[bin]]
 name = "serial_driver_inventory_generator"
 path = "src/bin/serial_driver_inventory_generator.rs"
 

@@ -2,7 +2,7 @@ use antithesis_sdk::random::AntithesisRng;
 use fuzzamoto::connections::{Connection, ConnectionType, HandshakeOpts, V1Transport};
 use fuzzamoto_ir::{
     FullProgramContext, Generator, Mutator, MutatorError, PerTestcaseMetadata, Program,
-    ProgramBuilder,
+    ProgramBuilder, RecentBlock,
     compiler::{CompiledAction, Compiler},
     generators::{
         // Address
@@ -10,6 +10,7 @@ use fuzzamoto_ir::{
         AddrRelayV2Generator,
         // Block
         BlockGenerator,
+        TipBlockGenerator,
         BloomFilterAddGenerator,
         BloomFilterClearGenerator,
         // Bloom
@@ -66,6 +67,14 @@ struct MempoolInfo {
     maxmempool: u64, // Maximum mempool size
     #[allow(dead_code)]
     mempoolminfee: f64, // Minimum fee rate
+}
+
+/// Response from getblockheader RPC
+#[derive(Debug, Deserialize, Clone)]
+struct BlockHeaderInfo {
+    height: u64,
+    #[allow(dead_code)]
+    hash: String,
 }
 
 /// Reorg detection result
@@ -128,6 +137,14 @@ impl RpcClient {
 
     fn get_mempool_info(&self) -> Result<MempoolInfo, String> {
         self.call("getmempoolinfo", &[])
+    }
+
+    fn get_block_header(&self, block_hash: &str) -> Result<BlockHeaderInfo, String> {
+        self.call("getblockheader", &[block_hash.into(), true.into()])
+    }
+
+    fn get_best_block_hash(&self) -> Result<String, String> {
+        self.call("getbestblockhash", &[])
     }
 }
 
@@ -344,6 +361,8 @@ struct IrBuilderState {
     connection_metas: Vec<ConnectionMeta>,
     /// Persistent compiler instance for streaming compilation
     compiler: Option<Compiler>,
+    /// Current tip height for TipBlockGenerator tracking
+    current_tip_height: u64,
 }
 
 impl IrBuilderState {
@@ -356,6 +375,7 @@ impl IrBuilderState {
             connections: Vec::new(),
             connection_metas: Vec::new(),
             compiler: None,
+            current_tip_height: 0,
         }
     }
 
@@ -674,6 +694,14 @@ impl IrBuilderState {
         let txo_count = full_context.txos.len();
         let header_count = full_context.headers.len();
 
+        // Set initial tip height from snapshot headers
+        self.current_tip_height = full_context
+            .headers
+            .iter()
+            .map(|h| h.height as u64)
+            .max()
+            .unwrap_or(0);
+
         self.full_context = Some(full_context);
         self.builder = Some(builder);
         self.compiler = Some(Compiler::new());
@@ -769,6 +797,15 @@ impl IrBuilderState {
             // Block generators
             "BlockGenerator" => {
                 let generator = BlockGenerator::default();
+                self.apply_generator(&generator)
+            }
+            "TipBlockGenerator" => {
+                let full_context = self
+                    .full_context
+                    .as_ref()
+                    .ok_or("No full context available")?;
+                let generator = TipBlockGenerator::new(full_context.headers.clone());
+                // Metadata is synced from compiler + RPC in compile(), so use current metadata
                 self.apply_generator(&generator)
             }
             "SendBlockGenerator" => {
@@ -967,12 +1004,68 @@ impl IrBuilderState {
 
         // NO RESET - streaming mode: instructions accumulate across compiles
 
+        // Sync metadata from compiler + RPC
+        self.sync_metadata_from_compiler_and_rpc();
+
         Ok(serde_json::json!({
             "compiled": true,
             "action_count": new_actions.len(),
             "messages_sent": messages_sent,
             "total_instructions": total_instructions
         }))
+    }
+
+    /// Sync metadata by querying the current tip from RPC and looking it up in compiler metadata
+    fn sync_metadata_from_compiler_and_rpc(&mut self) {
+        let compiler = match self.compiler.as_ref() {
+            Some(c) => c,
+            None => return,
+        };
+
+        // Get RPC client
+        let rpc_client = match std::env::var("NODE1_RPC_URL")
+            .ok()
+            .and_then(|url| RpcClient::from_url(&url).ok())
+        {
+            Some(c) => c,
+            None => return,
+        };
+
+        // Query current tip from RPC
+        let tip_hash = match rpc_client.get_best_block_hash() {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+
+        let tip_info = match rpc_client.get_block_header(&tip_hash) {
+            Ok(info) => info,
+            Err(_) => return,
+        };
+
+        // Parse the block hash and look it up in compiler metadata
+        let block_hash: bitcoin::BlockHash = match tip_hash.parse() {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+
+        let compiler_metadata = compiler.metadata();
+
+        // If the tip block was compiled by us, update metadata
+        if let Some((header_var_idx, _block_var_idx, _tx_vars)) =
+            compiler_metadata.block_variables(&block_hash)
+        {
+            let instr_idx = compiler_metadata
+                .variable_instruction(header_var_idx)
+                .unwrap_or(0);
+
+            let recent_block = RecentBlock {
+                height: tip_info.height,
+                defining_block: (header_var_idx, instr_idx),
+            };
+
+            self.current_tip_height = tip_info.height;
+            self.metadata.add_recent_blocks(vec![recent_block]);
+        }
     }
 }
 

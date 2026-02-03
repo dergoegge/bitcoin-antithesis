@@ -43,6 +43,7 @@ COPY --from=builder /build/target/release/serial_driver_addr_relay_v2_generator 
 COPY --from=builder /build/target/release/serial_driver_get_addr_generator /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/serial_driver_send_message_generator /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/serial_driver_block_generator /opt/antithesis/test/v1/main/
+COPY --from=builder /build/target/release/serial_driver_tip_block_generator /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/eventually_consistent /opt/antithesis/test/v1/main/
 
 # Copy health checker to root (not a test driver)

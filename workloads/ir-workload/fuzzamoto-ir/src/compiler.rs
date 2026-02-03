@@ -118,6 +118,19 @@ impl CompiledMetadata {
     pub fn connection_map(&self) -> &HashMap<ConnectionId, VariableIndex> {
         &self.connection_map
     }
+
+    /// Get all compiled blocks with their variable indices
+    /// Returns an iterator over (block_hash, header_var_index, block_var_index)
+    pub fn blocks(&self) -> impl Iterator<Item = (&bitcoin::BlockHash, usize, usize)> {
+        self.block_tx_var_map
+            .iter()
+            .map(|(hash, (header_var, block_var, _))| (hash, *header_var, *block_var))
+    }
+
+    /// Get the instruction index where a variable was defined
+    pub fn variable_instruction(&self, var_index: usize) -> Option<usize> {
+        self.variable_indices.get(var_index).copied()
+    }
 }
 
 #[derive(Debug)]
@@ -535,6 +548,11 @@ impl Compiler {
 
         // Return only the newly added actions
         Ok(self.output.actions[actions_before..].to_vec())
+    }
+
+    /// Get a reference to the compiled metadata
+    pub fn metadata(&self) -> &CompiledMetadata {
+        &self.output.metadata
     }
 
     /// Compile a single instruction
