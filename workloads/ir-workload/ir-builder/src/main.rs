@@ -81,15 +81,15 @@ struct RpcClient {
 }
 
 impl RpcClient {
-    fn new(url: &str, user: &str, password: &str) -> Self {
+    fn new(url: &str, user: &str, password: &str) -> Result<Self, String> {
         let transport = SimpleHttpTransport::builder()
             .url(url)
-            .expect("invalid url")
+            .map_err(|e| format!("Invalid RPC URL '{}': {}", url, e))?
             .auth(user, Some(password))
             .build();
-        Self {
+        Ok(Self {
             inner: JsonRpcClient::with_transport(transport),
-        }
+        })
     }
 
     fn from_url(url: &str) -> Result<Self, String> {
@@ -98,7 +98,7 @@ impl RpcClient {
         let (auth, host_port) = url.split_once('@').ok_or("URL must contain @")?;
         let (user, password) = auth.split_once(':').ok_or("Auth must be user:password")?;
         let rpc_url = format!("http://{}", host_port);
-        Ok(Self::new(&rpc_url, user, password))
+        Self::new(&rpc_url, user, password)
     }
 
     fn call<T: serde::de::DeserializeOwned>(
