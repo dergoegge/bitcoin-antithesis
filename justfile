@@ -103,5 +103,25 @@ launch-debugger moment debug_description:
       "antithesis.event_description":"{{debug_description}}"
       }}'
 
+get_archives moment:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo true # llm guard
+    session_id=$(echo '{{moment}}' | sed -n 's/.*session_id: "\([^"]*\)".*/\1/p')
+    input_hash=$(echo '{{moment}}' | sed -n 's/.*input_hash: "\([^"]*\)".*/\1/p')
+    vtime=$(echo '{{moment}}' | sed -n 's/.*vtime: \([0-9.]*\).*/\1/p')
+    echo "Parsed values: session_id=$session_id, input_hash=$input_hash, vtime=$vtime"
+    [[ -z "$session_id" ]] && echo "Failed to parse session_id" && exit 1
+    [[ -z "$input_hash" ]] && echo "Failed to parse input_hash" && exit 1
+    [[ -z "$vtime" ]] && echo "Failed to parse vtime" && exit 1
+    date
+    curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
+      -X POST https://brink.antithesis.com/api/v1/launch/get_log_artifact \
+      -d '{"params": { "custom.session_id":"'"$session_id"'",
+          "custom.input_hash":"'"$input_hash"'",
+          "custom.vtime":"'"$vtime"'",
+          "antithesis.report.recipients":"{{report_recipients}}"
+          } }'
+
 # Build, tag, and push all images
 build-and-push: build-and-tag push
