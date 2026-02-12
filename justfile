@@ -55,17 +55,24 @@ test-run-basic workload:
           "antithesis.report.recipients":"{{report_recipients}}"
           } }'
 
-test-run-custom workload container_faults_excluded network_faults_excluded description:
+test-run-custom workload container_faults_excluded network_faults_excluded node_to_disk_fault description:
     #!/usr/bin/env bash
     set -euo pipefail
     sudo true # llm guard
     date
+    fill_disk="false"
+    if [[ -n "{{node_to_disk_fault}}" ]]; then
+        fill_disk="true"
+    fi
     curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
       -X POST https://brink.antithesis.com/api/v1/launch/brink \
       -d '{"params": { "antithesis.description":"{{description}}",
           "antithesis.duration":"{{duration}}",
           "antithesis.config_image":"{{workload}}-config:antithesis",
+          "antithesis.test_name":"{{workload}}",
           "antithesis.images":"",
+          "custom.fill_disk":"'"$fill_disk"'",
+          "custom.node_to_disk_fault":"{{node_to_disk_fault}}",
           "custom.fault_profile": "{{fault_profile}}",
           "custom.exclusion_container_fault": "{{container_faults_excluded}}",
           "custom.exclusion_network_fault": "{{network_faults_excluded}}",
