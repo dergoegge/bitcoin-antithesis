@@ -2,11 +2,15 @@ services:
   node1:
     container_name: node1
     hostname: node1
-    image: bitcoin:antithesis
+    image: bitcoin-node1:antithesis
     build:
       context: ../../../images/bitcoin
       dockerfile: Dockerfile
       network: host
+      args:
+        - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
+        - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
+        - SANITIZERS=${NODE1_SANITIZERS:-thread}
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -35,11 +39,15 @@ services:
   node2:
     container_name: node2
     hostname: node2
-    image: bitcoin:antithesis
+    image: bitcoin-node2:antithesis
     build:
       context: ../../../images/bitcoin
       dockerfile: Dockerfile
       network: host
+      args:
+        - BITCOIN_BRANCH=${NODE2_BRANCH:-master}
+        - BITCOIN_REPO=${NODE2_REPO:-https://github.com/bitcoin/bitcoin.git}
+        - SANITIZERS=${NODE2_SANITIZERS:-}
     command:
       - "-regtest"
       - "-datadir=/data"
