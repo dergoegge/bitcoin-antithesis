@@ -26,7 +26,7 @@ jobs:
         password: ${{ secrets.ANTITHESIS_JSON_LOGIN_KEY }}
 
     - name: Build and tag images
-      run: just build-and-tag
+      run: just no_cache="--no-cache" build-and-tag
 
     - name: Push images to Antithesis Registry
       run: just push

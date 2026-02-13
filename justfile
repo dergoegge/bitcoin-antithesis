@@ -4,13 +4,14 @@ registry := "us-central1-docker.pkg.dev/molten-verve-216720/brink-repository"
 duration := "30"
 report_recipients := "niklas@brink.dev"
 fault_profile := "full"
+no_cache := ""
 
 # Build all images
 build-images:
-    docker compose -f workloads/initial-rpc-workload/config/docker-compose.yaml build
-    docker build -t initial-rpc-workload-config:antithesis workloads/initial-rpc-workload/config/
-    docker compose -f workloads/ir-workload/config/docker-compose.yaml build
-    docker build -t ir-workload-config:antithesis workloads/ir-workload/config/
+    docker compose -f workloads/initial-rpc-workload/config/docker-compose.yaml build {{no_cache}}
+    docker build {{no_cache}} -t initial-rpc-workload-config:antithesis workloads/initial-rpc-workload/config/
+    docker compose -f workloads/ir-workload/config/docker-compose.yaml build {{no_cache}}
+    docker build {{no_cache}} -t ir-workload-config:antithesis workloads/ir-workload/config/
 
 # Tag all images for the Antithesis registry
 tag:
