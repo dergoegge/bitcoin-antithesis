@@ -41,6 +41,22 @@ on:
         description: 'Sanitizers for node3'
         type: string
         default: ''
+      workload:
+        description: 'Workload config image name'
+        type: string
+        default: 'initial-rpc-workload'
+      container_faults_excluded:
+        description: 'Containers excluded from faults (semicolon-separated)'
+        type: string
+        default: 'health-checker;workload'
+      network_faults_excluded:
+        description: 'Containers excluded from network faults (semicolon-separated)'
+        type: string
+        default: 'health-checker;workload'
+      node_to_disk_fault:
+        description: 'Node to target with disk fault (empty to disable)'
+        type: string
+        default: ''
       duration:
         description: 'Test run duration in minutes'
         type: string
@@ -90,6 +106,10 @@ jobs:
     needs: build-and-push
     uses: ./.github/workflows/launch-run.yaml
     with:
+      workload: ${{ inputs.workload || 'initial-rpc-workload' }}
+      container_faults_excluded: ${{ inputs.container_faults_excluded || 'health-checker;workload' }}
+      network_faults_excluded: ${{ inputs.network_faults_excluded || 'health-checker;workload' }}
+      node_to_disk_fault: ${{ inputs.node_to_disk_fault || '' }}
       duration: ${{ inputs.duration || '480' }}
       run_description: ${{ inputs.run_description || 'Scheduled daily 8h run' }}
     secrets: inherit
