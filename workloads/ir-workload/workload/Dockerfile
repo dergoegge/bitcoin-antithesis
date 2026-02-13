@@ -45,6 +45,7 @@ COPY --from=builder /build/target/release/serial_driver_send_message_generator /
 COPY --from=builder /build/target/release/serial_driver_block_generator /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/serial_driver_tip_block_generator /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/eventually_consistent /opt/antithesis/test/v1/main/
+COPY workload/serial_driver_tip_and_compile.sh /opt/antithesis/test/v1/main/serial_driver_tip_and_compile
 
 # Copy health checker to root (not a test driver)
 COPY --from=builder /build/target/release/health_checker /health_checker

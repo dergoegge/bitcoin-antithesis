@@ -28,6 +28,8 @@ services:
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
+      - "-rpcthreads=4"
+      - "-par=4"
     volumes:
       - ./volumes/node1:/data
 
@@ -62,20 +64,22 @@ services:
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
+      - "-rpcthreads=4"
+      - "-par=4"
     volumes:
       - ./volumes/node2:/data
 
   node3:
     container_name: node3
     hostname: node3
-    image: bitcoin-pr31132:antithesis
+    image: bitcoin:antithesis
     build:
       context: ../../../images/bitcoin
       dockerfile: Dockerfile
       network: host
       args:
-        BITCOIN_REPO: https://github.com/andrewtoth/bitcoin
-        BITCOIN_BRANCH: "threaded-inputs"
+        - BITCOIN_BRANCH=master
+        - SANITIZERS=
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -94,6 +98,8 @@ services:
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
+      - "-rpcthreads=4"
+      - "-par=4"
     volumes:
       - ./volumes/node3:/data
 
