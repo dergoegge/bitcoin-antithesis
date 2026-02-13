@@ -10,8 +10,8 @@ no_cache := ""
 build-images:
     docker compose -f workloads/initial-rpc-workload/config/docker-compose.yaml build {{no_cache}}
     docker build {{no_cache}} -t initial-rpc-workload-config:antithesis workloads/initial-rpc-workload/config/
-    docker compose -f workloads/ir-workload/config/docker-compose.yaml build {{no_cache}}
-    docker build {{no_cache}} -t ir-workload-config:antithesis workloads/ir-workload/config/
+    docker compose -f workloads/ir-workload/config/docker-compose.yaml build
+    docker build -t ir-workload-config:antithesis workloads/ir-workload/config/
 
 # Tag all images for the Antithesis registry
 tag:
