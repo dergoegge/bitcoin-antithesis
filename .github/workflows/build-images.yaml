@@ -112,4 +112,5 @@ jobs:
       node_to_disk_fault: ${{ inputs.node_to_disk_fault || '' }}
       duration: ${{ inputs.duration || '480' }}
       run_description: ${{ inputs.run_description || 'Scheduled daily 8h run' }}
+      is_ephemeral: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
     secrets: inherit

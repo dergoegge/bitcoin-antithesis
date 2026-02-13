@@ -21,6 +21,9 @@ on:
       run_description:
         type: string
         default: 'CI'
+      is_ephemeral:
+        type: string
+        default: 'false'
   workflow_dispatch:  # Allows manual trigger
     inputs:
       workload:
@@ -47,6 +50,10 @@ on:
         description: 'Description for the test run'
         type: string
         default: 'CI'
+      is_ephemeral:
+        description: 'Mark run as ephemeral in Antithesis'
+        type: string
+        default: 'true'
 
 jobs:
   launch-run:
@@ -69,4 +76,4 @@ jobs:
 
     - name: Launch Run on Antithesis
       run: |
-        just duration=${{ inputs.duration }} test-run-custom "${{ inputs.workload }}" "${{ inputs.container_faults_excluded }}" "${{ inputs.network_faults_excluded }}" "${{ inputs.node_to_disk_fault }}" "Duration: ${{ inputs.duration }}min, ${{ inputs.run_description }}"
+        just duration=${{ inputs.duration }} test-run-custom "${{ inputs.workload }}" "${{ inputs.container_faults_excluded }}" "${{ inputs.network_faults_excluded }}" "${{ inputs.node_to_disk_fault }}" "Duration: ${{ inputs.duration }}min, ${{ inputs.run_description }}" "${{ inputs.is_ephemeral }}"

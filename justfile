@@ -54,7 +54,7 @@ test-run-basic workload:
           "antithesis.report.recipients":"{{report_recipients}}"
           } }'
 
-test-run-custom workload container_faults_excluded network_faults_excluded node_to_disk_fault description:
+test-run-custom workload container_faults_excluded network_faults_excluded node_to_disk_fault description is_ephemeral="false":
     #!/usr/bin/env bash
     set -euo pipefail
     sudo true # llm guard
@@ -70,6 +70,7 @@ test-run-custom workload container_faults_excluded network_faults_excluded node_
           "antithesis.config_image":"{{workload}}-config:antithesis",
           "antithesis.test_name":"{{workload}}",
           "antithesis.images":"",
+          "antithesis.is_ephemeral":"{{is_ephemeral}}",
           "custom.fill_disk":"'"$fill_disk"'",
           "custom.node_to_disk_fault":"{{node_to_disk_fault}}",
           "custom.fault_profile": "{{fault_profile}}",
