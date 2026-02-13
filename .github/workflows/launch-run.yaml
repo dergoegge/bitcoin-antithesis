@@ -1,0 +1,72 @@
+name: Launch Run
+
+on:
+  workflow_call:  # Called by build-images workflow after build completes
+    inputs:
+      workload:
+        type: string
+        default: 'initial-rpc-workload'
+      container_faults_excluded:
+        type: string
+        default: 'health-checker;workload'
+      network_faults_excluded:
+        type: string
+        default: 'health-checker;workload'
+      node_to_disk_fault:
+        type: string
+        default: ''
+      duration:
+        type: string
+        default: '30'
+      run_description:
+        type: string
+        default: 'CI'
+  workflow_dispatch:  # Allows manual trigger
+    inputs:
+      workload:
+        description: 'Workload config image name'
+        type: string
+        default: 'initial-rpc-workload'
+      container_faults_excluded:
+        description: 'Containers excluded from faults (semicolon-separated)'
+        type: string
+        default: 'health-checker;workload'
+      network_faults_excluded:
+        description: 'Containers excluded from network faults (semicolon-separated)'
+        type: string
+        default: 'health-checker;workload'
+      node_to_disk_fault:
+        description: 'Node to target with disk fault (empty to disable)'
+        type: string
+        default: ''
+      duration:
+        description: 'Test run duration in minutes'
+        type: string
+        default: '30'
+      run_description:
+        description: 'Description for the test run'
+        type: string
+        default: 'CI'
+
+jobs:
+  launch-run:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout the code
+      uses: actions/checkout@v3
+
+    - name: Create dot env
+      run: |
+        cat << 'EOF' > .env
+        ${{ secrets.ANTITHESIS_BRINK_PW }}
+        EOF
+
+    - name: Install just
+      run: |
+        apt update && apt install -y curl
+        just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+    - name: Launch Run on Antithesis
+      run: |
+        just duration=${{ inputs.duration }} test-run-custom "${{ inputs.workload }}" "${{ inputs.container_faults_excluded }}" "${{ inputs.network_faults_excluded }}" "${{ inputs.node_to_disk_fault }}" "Duration: ${{ inputs.duration }}min, ${{ inputs.run_description }}"

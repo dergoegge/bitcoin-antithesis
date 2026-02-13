@@ -15,9 +15,9 @@ build-images:
 # Tag all images for the Antithesis registry
 tag:
     docker tag bitcoin:antithesis {{registry}}/bitcoin:antithesis
-    docker tag bitcoin-29x:antithesis {{registry}}/bitcoin-29x:antithesis
-    docker tag bitcoin-pr31132:antithesis {{registry}}/bitcoin-pr31132:antithesis
-    docker tag bitcoin-tsan:antithesis {{registry}}/bitcoin-tsan:antithesis
+    docker tag bitcoin-29x:antithesis {{registry}}/bitcoin-29x:antithesis || true
+    docker tag bitcoin-pr31132:antithesis {{registry}}/bitcoin-pr31132:antithesis || true
+    docker tag bitcoin-tsan:antithesis {{registry}}/bitcoin-tsan:antithesis || true
     docker tag initial-rpc-workload-workload:antithesis {{registry}}/initial-rpc-workload-workload:antithesis
     docker tag initial-rpc-workload-config:antithesis {{registry}}/initial-rpc-workload-config:antithesis
     docker tag ir-workload-workload:antithesis {{registry}}/ir-workload-workload:antithesis
@@ -31,9 +31,9 @@ build-and-tag: build-images tag
 push:
     sudo true # llm guard
     docker push {{registry}}/bitcoin:antithesis
-    docker push {{registry}}/bitcoin-29x:antithesis
-    docker push {{registry}}/bitcoin-pr31132:antithesis
-    docker push {{registry}}/bitcoin-tsan:antithesis
+    docker push {{registry}}/bitcoin-29x:antithesis || true
+    docker push {{registry}}/bitcoin-pr31132:antithesis || true
+    docker push {{registry}}/bitcoin-tsan:antithesis || true
     docker push {{registry}}/initial-rpc-workload-workload:antithesis
     docker push {{registry}}/initial-rpc-workload-config:antithesis
     docker push {{registry}}/ir-workload-workload:antithesis

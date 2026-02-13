@@ -1,0 +1,40 @@
+name: Build and Push Config + Workload Images
+
+on:
+  schedule:
+    - cron: '0 20 * * *'  # Every day at 8pm UTC
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build-and-push:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout the code
+      uses: actions/checkout@v3
+
+    - name: Install just
+      run: |
+        apt update && apt install -y curl
+        just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+    - name: Login to Antithesis Docker Registry
+      uses: docker/login-action@v3
+      with:
+        registry: us-central1-docker.pkg.dev
+        username: _json_key
+        password: ${{ secrets.ANTITHESIS_JSON_LOGIN_KEY }}
+
+    - name: Build and tag images
+      run: just build-and-tag
+
+    - name: Push images to Antithesis Registry
+      run: just push
+
+  launch-run:
+    needs: build-and-push
+    uses: ./.github/workflows/launch-run.yaml
+    with:
+      duration: '480'
+      run_description: 'Scheduled daily 8h run'
+    secrets: inherit
