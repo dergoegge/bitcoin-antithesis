@@ -1,7 +1,7 @@
 FROM debian:bookworm AS builder
 
 ARG BITCOIN_BRANCH=master
-ARG LLVM_V=21
+ARG LLVM_V=20
 ARG BITCOIN_REPO=https://github.com/bitcoin/bitcoin.git
 
 # Install dependencies
