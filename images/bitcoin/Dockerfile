@@ -92,7 +92,7 @@ RUN echo "race:/src/bitcoin/src/antithesis_instrumentation.h" >> ./tsan.supp
 RUN echo "signal:HandleSIGTERM" >> ./tsan.supp
 
 # Copy llvm-symbolizer and its dependencies
-COPY --from=builder /usr/bin/llvm-symbolizer-21 /usr/bin/llvm-symbolizer
+COPY --from=builder /usr/bin/llvm-symbolizer-20 /usr/bin/llvm-symbolizer
 COPY --from=builder /symbolizer-libs/ /usr/lib/
 
 # Create symbols directory for Antithesis
