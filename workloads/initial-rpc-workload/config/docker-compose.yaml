@@ -28,7 +28,7 @@ services:
       - "-dbcache=4"
       - "-maxmempool=5"
       - "-loglevelalways"
-#      - "-printtoconsole=0"
+      - "-printtoconsole=0"
       - "-debug"
       - "-rpcthreads=4"
       - "-par=4"
