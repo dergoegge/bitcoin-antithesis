@@ -1,9 +1,12 @@
 use std::env;
+use std::path::PathBuf;
 
 use jsonrpc::simple_http::SimpleHttpTransport;
 use jsonrpc::Client as JsonRpcClient;
 use serde::Deserialize;
 use serde_json::value::RawValue;
+
+pub mod ipc;
 
 /// Response from getchaintips RPC
 #[derive(Debug, Deserialize, Clone)]
@@ -246,6 +249,37 @@ pub fn assert_mempool_metrics(client: &Client, context: &str) {
             &serde_json::json!({ "context": context })
         );
     }
+}
+
+/// IPC node configuration from environment variables
+pub struct IpcNodeConfig {
+    pub socket_path: PathBuf,
+}
+
+impl IpcNodeConfig {
+    pub fn from_env(node_name: &str) -> Self {
+        let env_var = format!("{}_IPC_SOCKET", node_name.to_uppercase());
+        let path = env::var(&env_var)
+            .unwrap_or_else(|_| panic!("Missing environment variable: {}", env_var));
+        Self {
+            socket_path: PathBuf::from(path),
+        }
+    }
+}
+
+/// Get all IPC node configurations from environment
+pub fn get_all_ipc_nodes() -> Vec<IpcNodeConfig> {
+    vec![
+        IpcNodeConfig::from_env("NODE1"),
+        IpcNodeConfig::from_env("NODE2"),
+        IpcNodeConfig::from_env("NODE3"),
+    ]
+}
+
+/// Pick a random IPC node from the list
+pub fn random_ipc_node(nodes: &[IpcNodeConfig]) -> &IpcNodeConfig {
+    let idx = random_range(nodes.len() as u64) as usize;
+    &nodes[idx]
 }
 
 /// Assert sometimes conditions for wallet metrics

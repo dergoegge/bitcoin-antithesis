@@ -1,4 +1,10 @@
-FROM rust:1.75-bookworm AS builder
+FROM rust:1.85-bookworm AS builder
+
+# Build capnproto from source (required by bitcoin-capnp-types build script)
+RUN apt-get update && apt-get install -y curl g++ && rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL https://capnproto.org/capnproto-c++-1.1.0.tar.gz | tar xz && \
+    cd capnproto-c++-1.1.0 && ./configure --prefix=/usr/local && make -j$(nproc) && make install && \
+    cd / && rm -rf capnproto-c++-1.1.0
 
 WORKDIR /build
 
@@ -38,6 +44,10 @@ COPY --from=builder /build/target/release/anytime_loadwallet /opt/antithesis/tes
 COPY --from=builder /build/target/release/anytime_unloadwallet /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_pruneblockchain /opt/antithesis/test/v1/main/
 #COPY --from=builder /build/target/release/serial_driver_tx_bulkdata /opt/antithesis/test/v1/main/
+COPY --from=builder /build/target/release/parallel_driver_ipc_echo /opt/antithesis/test/v1/main/
+COPY --from=builder /build/target/release/parallel_driver_ipc_mining_info /opt/antithesis/test/v1/main/
+COPY --from=builder /build/target/release/parallel_driver_ipc_block_template /opt/antithesis/test/v1/main/
+COPY --from=builder /build/target/release/parallel_driver_ipc_check_block /opt/antithesis/test/v1/main/
 
 # Copy health checker to root (not a test driver)
 COPY --from=builder /build/target/release/health_checker /health_checker

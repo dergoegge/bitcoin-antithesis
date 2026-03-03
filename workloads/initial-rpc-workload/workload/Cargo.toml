@@ -8,6 +8,13 @@ antithesis_sdk = "0.2"
 jsonrpc = "0.18"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+bitcoin-capnp-types = { git = "https://github.com/dergoegge/bitcoin-capnp-types.git", branch = "updated-capnp-files" }
+capnp = "0.25"
+capnp-rpc = "0.25"
+tokio = { version = "1", features = ["rt", "net", "macros"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+futures = "0.3"
+bitcoin = "0.32"
 
 [[bin]]
 name = "parallel_driver_tx_simple"
@@ -80,3 +87,19 @@ path = "src/bin/anytime_pruneblockchain.rs"
 [[bin]]
 name = "serial_driver_tx_bulkdata"
 path = "src/bin/serial_driver_tx_bulkdata.rs"
+
+[[bin]]
+name = "parallel_driver_ipc_echo"
+path = "src/bin/parallel_driver_ipc_echo.rs"
+
+[[bin]]
+name = "parallel_driver_ipc_mining_info"
+path = "src/bin/parallel_driver_ipc_mining_info.rs"
+
+[[bin]]
+name = "parallel_driver_ipc_block_template"
+path = "src/bin/parallel_driver_ipc_block_template.rs"
+
+[[bin]]
+name = "parallel_driver_ipc_check_block"
+path = "src/bin/parallel_driver_ipc_check_block.rs"

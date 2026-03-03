@@ -11,6 +11,7 @@ services:
         - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
         - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE1_SANITIZERS:-thread}
+    entrypoint: ["bitcoin-node"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -27,10 +28,11 @@ services:
       - "-dbcache=4"
       - "-maxmempool=5"
       - "-loglevelalways"
-      - "-printtoconsole=0"
+#      - "-printtoconsole=0"
       - "-debug"
       - "-rpcthreads=4"
       - "-par=4"
+      - "-ipcbind=unix"
     volumes:
       - ./volumes/node1:/data
 
@@ -46,6 +48,7 @@ services:
         - BITCOIN_BRANCH=${NODE2_BRANCH:-master}
         - BITCOIN_REPO=${NODE2_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE2_SANITIZERS:-}
+    entrypoint: ["bitcoin-node"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -68,6 +71,7 @@ services:
       - "-debug"
       - "-rpcthreads=4"
       - "-par=4"
+      - "-ipcbind=unix"
     volumes:
       - ./volumes/node2:/data
 
@@ -83,6 +87,7 @@ services:
         - BITCOIN_BRANCH=${NODE3_BRANCH:-master}
         - BITCOIN_REPO=${NODE3_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE3_SANITIZERS:-}
+    entrypoint: ["bitcoin-node"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -103,6 +108,7 @@ services:
       - "-debug"
       - "-rpcthreads=4"
       - "-par=4"
+      - "-ipcbind=unix"
     volumes:
       - ./volumes/node3:/data
 
@@ -124,6 +130,13 @@ services:
       - NODE1_RPC_URL=http://user:password@node1:18443
       - NODE2_RPC_URL=http://user:password@node2:18443
       - NODE3_RPC_URL=http://user:password@node3:18443
+      - NODE1_IPC_SOCKET=/ipc/node1/regtest/node.sock
+      - NODE2_IPC_SOCKET=/ipc/node2/regtest/node.sock
+      - NODE3_IPC_SOCKET=/ipc/node3/regtest/node.sock
+    volumes:
+      - ./volumes/node1:/ipc/node1
+      - ./volumes/node2:/ipc/node2
+      - ./volumes/node3:/ipc/node3
 
   # Workload container with test drivers (invoked by Antithesis)
   workload:
@@ -142,3 +155,10 @@ services:
       - NODE1_RPC_URL=http://user:password@node1:18443
       - NODE2_RPC_URL=http://user:password@node2:18443
       - NODE3_RPC_URL=http://user:password@node3:18443
+      - NODE1_IPC_SOCKET=/ipc/node1/regtest/node.sock
+      - NODE2_IPC_SOCKET=/ipc/node2/regtest/node.sock
+      - NODE3_IPC_SOCKET=/ipc/node3/regtest/node.sock
+    volumes:
+      - ./volumes/node1:/ipc/node1
+      - ./volumes/node2:/ipc/node2
+      - ./volumes/node3:/ipc/node3

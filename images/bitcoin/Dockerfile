@@ -62,10 +62,12 @@ RUN cmake -S bitcoin/ -B bitcoin/build \
     -DAPPEND_CXXFLAGS="-fsanitize-coverage=trace-pc-guard -g -include /src/bitcoin/src/antithesis_instrumentation.h" \
     -DAPPEND_CFLAGS="-fsanitize-coverage=trace-pc-guard -g -include /src/bitcoin/src/antithesis_instrumentation.h" \
     -DAPPEND_LDFLAGS="-fuse-ld=lld-${LLVM_V} -Wl,-z,muldefs,--build-id" \
-    -DSANITIZERS="$SANITIZERS"
+    -DSANITIZERS="$SANITIZERS" \
+    -DENABLE_IPC=ON
 
 RUN cmake --build /src/bitcoin/build -j$(nproc) --target bitcoind
 RUN cmake --build /src/bitcoin/build -j$(nproc) --target bitcoin-cli
+RUN cmake --build /src/bitcoin/build -j$(nproc) --target bitcoin-node
 
 # Collect llvm-symbolizer's shared library dependencies
 RUN mkdir -p /symbolizer-libs && \
@@ -85,6 +87,7 @@ RUN apt-get update && apt-get install -y \
 # Copy bitcoind binary
 COPY --from=builder /src/bitcoin/build/bin/bitcoind /usr/local/bin/bitcoind
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-cli /usr/local/bin/bitcoin-cli
+COPY --from=builder /src/bitcoin/build/bin/bitcoin-node /usr/local/bin/bitcoin-node
 COPY --from=builder /src/bitcoin/test/sanitizer_suppressions/tsan ./tsan.supp
 
 # Add additional suppressions for Antithesis
@@ -98,6 +101,7 @@ COPY --from=builder /symbolizer-libs/ /usr/lib/
 # Create symbols directory for Antithesis
 RUN mkdir -p /symbols
 RUN ln -s /usr/local/bin/bitcoind /symbols/bitcoind
+RUN ln -s /usr/local/bin/bitcoin-node /symbols/bitcoin-node
 
 # Download libvoidstar for Antithesis instrumentation
 RUN wget https://antithesis.com/assets/instrumentation/libvoidstar.so -O /usr/lib/libvoidstar.so
