@@ -58,12 +58,19 @@ RUN sed -i --regexp-extended '/.*rm -rf .*extract_dir.*/d' ./bitcoin/depends/fun
 	  CFLAGS="-fsanitize=${SANITIZERS}" CXXFLAGS="-fsanitize=${SANITIZERS}" \
       -j$(nproc)
 
+# Compile instrumentation as a single object file
+# (header must be included in exactly one TU, not force-included everywhere)
+RUN clang++-${LLVM_V} -c -g ${SANITIZERS:+-fsanitize=${SANITIZERS}} \
+    -o /src/antithesis_instrumentation.o \
+    -x c++ /dev/null \
+    -include /src/bitcoin/src/antithesis_instrumentation.h
+
 RUN cmake -S bitcoin/ -B bitcoin/build \
      --toolchain depends/$(./bitcoin/depends/config.guess)/toolchain.cmake \
     -DAPPEND_CPPFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -DABORT_ON_FAILED_ASSUME" \
-    -DAPPEND_CXXFLAGS="-fsanitize-coverage=trace-pc-guard -g -include /src/bitcoin/src/antithesis_instrumentation.h" \
-    -DAPPEND_CFLAGS="-fsanitize-coverage=trace-pc-guard -g -include /src/bitcoin/src/antithesis_instrumentation.h" \
-    -DAPPEND_LDFLAGS="-fuse-ld=lld-${LLVM_V} -Wl,-z,muldefs,--build-id" \
+    -DAPPEND_CXXFLAGS="-fsanitize-coverage=trace-pc-guard -g" \
+    -DAPPEND_CFLAGS="-fsanitize-coverage=trace-pc-guard -g" \
+    -DAPPEND_LDFLAGS="-fuse-ld=lld-${LLVM_V} -Wl,--build-id /src/antithesis_instrumentation.o" \
     -DSANITIZERS="$SANITIZERS" \
     -DENABLE_IPC=ON
 
