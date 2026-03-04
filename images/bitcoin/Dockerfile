@@ -122,6 +122,7 @@ RUN mkdir -p /data
 EXPOSE 18444 18443
 
 ENV TSAN_OPTIONS="suppressions=/tsan.supp external_symbolizer_path=/usr/bin/llvm-symbolizer"
+ENV ASAN_OPTIONS="external_symbolizer_path=/usr/bin/llvm-symbolizer"
 # Default entrypoint
 ENTRYPOINT ["bitcoind"]
 CMD ["-regtest", "-datadir=/data", "-rpcallowip=0.0.0.0/0", "-rpcbind=0.0.0.0", "-rpcuser=user", "-rpcpassword=password", "-server=1", "-listen=1", "-listenonion=0", "-fallbackfee=0.0001"]
