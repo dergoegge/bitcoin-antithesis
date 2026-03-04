@@ -49,13 +49,15 @@ ENV LD=lld-${LLVM_V}
 ENV SOURCES_PATH=/tmp/bitcoin-depends
 RUN make -C bitcoin/depends NO_QT=1 NO_ZMQ=1 NO_USDT=1 download-linux SOURCES_PATH=$SOURCES_PATH
 # Keep extracted source
+
+ARG SANITIZERS=""
 RUN sed -i --regexp-extended '/.*rm -rf .*extract_dir.*/d' ./bitcoin/depends/funcs.mk && \
     make -C ./bitcoin/depends DEBUG=1 NO_QT=1 NO_ZMQ=1 NO_USDT=1 \
       SOURCES_PATH=$SOURCES_PATH \
       AR=llvm-ar-${LLVM_V} NM=llvm-nm-${LLVM_V} RANLIB=llvm-ranlib-${LLVM_V} STRIP=llvm-strip-${LLVM_V} \
+	  CFLAGS="-fsanitize=${SANITIZERS}" CXXFLAGS="-fsanitize=${SANITIZERS}" \
       -j$(nproc)
 
-ARG SANITIZERS=""
 RUN cmake -S bitcoin/ -B bitcoin/build \
      --toolchain depends/$(./bitcoin/depends/config.guess)/toolchain.cmake \
     -DAPPEND_CPPFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -DABORT_ON_FAILED_ASSUME" \
