@@ -40,7 +40,7 @@ on:
       node3_sanitizers:
         description: 'Sanitizers for node3'
         type: string
-        default: ''
+        default: 'address'
       workload:
         description: 'Workload config image name'
         type: string

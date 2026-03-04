@@ -86,7 +86,7 @@ services:
       args:
         - BITCOIN_BRANCH=${NODE3_BRANCH:-master}
         - BITCOIN_REPO=${NODE3_REPO:-https://github.com/bitcoin/bitcoin.git}
-        - SANITIZERS=${NODE3_SANITIZERS:-}
+        - SANITIZERS=${NODE3_SANITIZERS:-address}
     entrypoint: ["bitcoin-node"]
     command:
       - "-regtest"
