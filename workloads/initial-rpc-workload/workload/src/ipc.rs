@@ -1,14 +1,11 @@
 use std::path::Path;
 
 use bitcoin_capnp_types::{
-    echo_capnp::echo,
-    init_capnp::init,
-    mining_capnp::mining,
-    proxy_capnp::thread,
+    echo_capnp::echo, init_capnp::init, mining_capnp::mining, proxy_capnp::thread,
 };
-use capnp_rpc::{RpcSystem, rpc_twoparty_capnp::Side, twoparty::VatNetwork};
+use capnp_rpc::{rpc_twoparty_capnp::Side, twoparty::VatNetwork, RpcSystem};
 use futures::io::BufReader;
-use tokio::net::{UnixStream, unix::OwnedReadHalf};
+use tokio::net::{unix::OwnedReadHalf, UnixStream};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 /// Connect to a Unix socket, create RPC system, and bootstrap the Init client.

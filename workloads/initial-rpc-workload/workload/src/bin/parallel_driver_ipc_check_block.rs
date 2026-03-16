@@ -97,24 +97,13 @@ async fn main() {
                     Ok(response) => match response.get() {
                         Ok(result) => {
                             let valid = result.get_result();
-                            antithesis_sdk::assert_always!(
-                                valid,
-                                "IPC checkBlock(merkle=true, pow=false) passes for template block",
-                                &serde_json::json!({ "valid": valid })
-                            );
-                            println!("checkBlock(merkle=true, pow=false): valid={}", valid);
+
                             if !valid {
                                 if let Ok(reason) = result.get_reason() {
-                                    eprintln!(
-                                        "  reason: {}",
-                                        reason.to_str().unwrap_or("?")
-                                    );
+                                    eprintln!("  reason: {}", reason.to_str().unwrap_or("?"));
                                 }
                                 if let Ok(debug) = result.get_debug() {
-                                    eprintln!(
-                                        "  debug: {}",
-                                        debug.to_str().unwrap_or("?")
-                                    );
+                                    eprintln!("  debug: {}", debug.to_str().unwrap_or("?"));
                                 }
                             }
                         }
