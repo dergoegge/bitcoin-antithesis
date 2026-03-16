@@ -97,7 +97,7 @@ jobs:
         NODE3_BRANCH: ${{ inputs.node3_branch || 'master' }}
         NODE3_REPO: ${{ inputs.node3_repo || 'https://github.com/bitcoin/bitcoin.git' }}
         NODE3_SANITIZERS: ${{ inputs.node3_sanitizers || 'address' }}
-      run: docket system prune -f && just no_cache="--no-cache" build-and-tag
+      run: docker system prune -f && just no_cache="--no-cache" build-and-tag
 
     - name: Push images to Antithesis Registry
       run: just push
