@@ -3,8 +3,6 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    antithesis_sdk::antithesis_init();
-
     println!("Health checker: waiting for all nodes to be ready...");
 
     let nodes = get_all_nodes();

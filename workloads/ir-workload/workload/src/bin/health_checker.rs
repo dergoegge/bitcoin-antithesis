@@ -20,8 +20,6 @@ const P2WSH_OP_TRUE_SCRIPT_PUBKEY: [u8; 34] = [
 const OP_TRUE_WITNESS_SCRIPT: [u8; 1] = [0x51];
 
 fn main() {
-    antithesis_sdk::antithesis_init();
-
     println!("Health checker: waiting for all nodes to be ready...");
 
     let nodes = get_all_nodes();
