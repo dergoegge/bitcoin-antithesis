@@ -35,12 +35,12 @@ pub struct ReorgInfo {
 }
 
 /// Response from getwalletinfo RPC
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct WalletInfo {
     pub walletname: String,
     pub txcount: u64,
     pub keypoolsize: u64,
-    #[serde(default)]
     pub keypoolsize_hd_internal: Option<u64>,
     pub paytxfee: f64,
     pub private_keys_enabled: bool,
