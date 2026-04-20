@@ -285,6 +285,8 @@ pub fn random_ipc_node(nodes: &[IpcNodeConfig]) -> &IpcNodeConfig {
 /// Assert sometimes conditions for wallet metrics
 pub fn assert_wallet_metrics(client: &Client, context: &str) {
     if let Ok(wallet) = get_wallet_info(client) {
+        println!("Wallet info for context '{}': {:?}", context, wallet);
+
         // Sometimes wallet has transactions
         antithesis_sdk::assert_sometimes_greater_than!(
             wallet.txcount,
@@ -308,5 +310,7 @@ pub fn assert_wallet_metrics(client: &Client, context: &str) {
             "Wallet has more than 1000 transactions",
             &serde_json::json!({ "context": context })
         );
+    } else {
+        println!("Failed to get wallet info for context '{}'", context);
     }
 }
