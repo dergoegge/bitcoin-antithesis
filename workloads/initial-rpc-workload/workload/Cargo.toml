@@ -77,6 +77,10 @@ name = "anytime_loadwallet"
 path = "src/bin/anytime_loadwallet.rs"
 
 [[bin]]
+name = "anytime_echo"
+path = "src/bin/anytime_echo.rs"
+
+[[bin]]
 name = "anytime_unloadwallet"
 path = "src/bin/anytime_unloadwallet.rs"
 
