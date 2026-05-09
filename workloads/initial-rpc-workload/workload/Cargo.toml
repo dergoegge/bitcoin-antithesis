@@ -14,7 +14,7 @@ capnp-rpc = "0.25"
 tokio = { version = "1", features = ["rt", "net", "macros"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 futures = "0.3"
-bitcoin = "0.32"
+bitcoin = { version = "0.32", features = ["serde"] }
 
 [[bin]]
 name = "parallel_driver_tx_simple"
@@ -47,6 +47,10 @@ path = "src/bin/parallel_driver_tx_consolidate.rs"
 [[bin]]
 name = "parallel_driver_blocks"
 path = "src/bin/parallel_driver_blocks.rs"
+
+[[bin]]
+name = "parallel_driver_invalid_blocks"
+path = "src/bin/parallel_driver_invalid_blocks.rs"
 
 [[bin]]
 name = "eventually_consistency"
