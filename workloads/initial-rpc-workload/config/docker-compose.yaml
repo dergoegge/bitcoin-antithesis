@@ -11,7 +11,7 @@ services:
         - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
         - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE1_SANITIZERS:-thread}
-    entrypoint: ["bitcoin-node"]
+    entrypoint: ["bitcoin-node-wrapper"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -31,7 +31,6 @@ services:
       - "-printtoconsole=0"
       - "-debug"
       - "-rpcthreads=4"
-      - "-par=4"
       - "-ipcbind=unix"
     volumes:
       - ./volumes/node1:/data
@@ -48,7 +47,7 @@ services:
         - BITCOIN_BRANCH=${NODE2_BRANCH:-master}
         - BITCOIN_REPO=${NODE2_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE2_SANITIZERS:-}
-    entrypoint: ["bitcoin-node"]
+    entrypoint: ["bitcoin-node-wrapper"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -70,7 +69,6 @@ services:
       - "-printtoconsole=0"
       - "-debug"
       - "-rpcthreads=4"
-      - "-par=4"
       - "-ipcbind=unix"
     volumes:
       - ./volumes/node2:/data
@@ -87,7 +85,7 @@ services:
         - BITCOIN_BRANCH=${NODE3_BRANCH:-master}
         - BITCOIN_REPO=${NODE3_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE3_SANITIZERS:-address}
-    entrypoint: ["bitcoin-node"]
+    entrypoint: ["bitcoin-node-wrapper"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -107,7 +105,6 @@ services:
       - "-printtoconsole=0"
       - "-debug"
       - "-rpcthreads=4"
-      - "-par=4"
       - "-ipcbind=unix"
     volumes:
       - ./volumes/node3:/data
