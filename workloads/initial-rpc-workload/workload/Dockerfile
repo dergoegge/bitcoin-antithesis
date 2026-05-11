@@ -41,6 +41,7 @@ COPY --from=builder /build/target/release/anytime_gettxoutsetinfo /opt/antithesi
 COPY --from=builder /build/target/release/parallel_driver_prioritise_tx /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_abandontransaction /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_loadwallet /opt/antithesis/test/v1/main/
+COPY --from=builder /build/target/release/anytime_echo /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_unloadwallet /opt/antithesis/test/v1/main/
 COPY --from=builder /build/target/release/anytime_pruneblockchain /opt/antithesis/test/v1/main/
 #COPY --from=builder /build/target/release/serial_driver_tx_bulkdata /opt/antithesis/test/v1/main/
