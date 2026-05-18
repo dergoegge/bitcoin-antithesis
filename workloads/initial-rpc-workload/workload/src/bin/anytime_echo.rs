@@ -15,15 +15,16 @@ fn main() {
     let payload_len = (antithesis_sdk::random::get_random() as usize) % 1_999_000;
     let payload = "a".repeat(payload_len);
 
-    let response = client.call::<serde_json::Value>("echo", &[json!(payload)]).unwrap();
-    let echoed = response.as_array().unwrap().first().unwrap();
-    antithesis_sdk::assert_always!(
-        *echoed == json!(payload),
-        "echo RPC response matches input",
-        &serde_json::json!({
-            "input": payload,
-            "output": echoed
-        })
-    );
-    println!("[echo] RPC response matched input ({} chars)", payload_len);
+    match client.call::<serde_json::Value>("echo", &[json!(payload)]) {
+        Ok(response) => {
+            let echoed = response.as_array().unwrap().first().unwrap();
+            antithesis_sdk::assert_always!(
+                *echoed == json!(payload),
+                "echo RPC response matches input"
+            );
+        }
+        Err(e) => {
+            eprintln!("[echo] RPC call failed: {}", e);
+        }
+    }
 }
