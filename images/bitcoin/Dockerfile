@@ -53,10 +53,10 @@ RUN make -C bitcoin/depends NO_QT=1 NO_ZMQ=1 NO_USDT=1 download-linux SOURCES_PA
 ARG SANITIZERS=""
 RUN sed -i --regexp-extended '/.*rm -rf .*extract_dir.*/d' ./bitcoin/depends/funcs.mk && \
     make -C ./bitcoin/depends DEBUG=1 NO_QT=1 NO_ZMQ=1 NO_USDT=1 \
-      SOURCES_PATH=$SOURCES_PATH \
-      AR=llvm-ar-${LLVM_V} NM=llvm-nm-${LLVM_V} RANLIB=llvm-ranlib-${LLVM_V} STRIP=llvm-strip-${LLVM_V} \
-	  CFLAGS="-fsanitize=${SANITIZERS}" CXXFLAGS="-fsanitize=${SANITIZERS}" \
-      -j$(nproc)
+    SOURCES_PATH=$SOURCES_PATH \
+    AR=llvm-ar-${LLVM_V} NM=llvm-nm-${LLVM_V} RANLIB=llvm-ranlib-${LLVM_V} STRIP=llvm-strip-${LLVM_V} \
+    CFLAGS="-fsanitize=${SANITIZERS}" CXXFLAGS="-fsanitize=${SANITIZERS}" \
+    -j$(nproc)
 
 # Compile instrumentation as a single object file
 # (header must be included in exactly one TU, not force-included everywhere)
@@ -66,7 +66,7 @@ RUN clang++-${LLVM_V} -c -g ${SANITIZERS:+-fsanitize=${SANITIZERS}} \
     -include /src/bitcoin/src/antithesis_instrumentation.h
 
 RUN cmake -S bitcoin/ -B bitcoin/build \
-     --toolchain depends/$(./bitcoin/depends/config.guess)/toolchain.cmake \
+    --toolchain depends/$(./bitcoin/depends/config.guess)/toolchain.cmake \
     -DAPPEND_CPPFLAGS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -DABORT_ON_FAILED_ASSUME" \
     -DAPPEND_CXXFLAGS="-fsanitize-coverage=trace-pc-guard -g" \
     -DAPPEND_CFLAGS="-fsanitize-coverage=trace-pc-guard -g" \
@@ -97,6 +97,11 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /src/bitcoin/build/bin/bitcoind /usr/local/bin/bitcoind
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-cli /usr/local/bin/bitcoin-cli
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-node /usr/local/bin/bitcoin-node
+
+# Entrypoint wrapper that fuzzes config (-inputfetchthreads=0..16, -par=1/4).
+COPY bitcoin-node-wrapper.sh /usr/local/bin/bitcoin-node-wrapper
+RUN chmod +x /usr/local/bin/bitcoin-node-wrapper
+
 COPY --from=builder /src/bitcoin/test/sanitizer_suppressions/tsan ./tsan.supp
 
 # Add additional suppressions for Antithesis
