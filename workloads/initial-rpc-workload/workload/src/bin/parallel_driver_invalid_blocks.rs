@@ -78,7 +78,14 @@ impl Corruption {
 
 struct BlockUtxoSet {
     available: Vec<Utxo>,
+    // UTXOs spent by txs that were actually added to the block. `spent` must
+    // never contain UTXOs whose spending tx failed to build: DupInputInBlock
+    // picks its conflict from here, and a "conflict" nothing spends would make
+    // the corrupted block valid, falsely tripping the always-assertion.
     spent: Vec<Utxo>,
+    // UTXOs taken for the tx currently being built; moved to `spent` on
+    // success or back to `available` on failure.
+    pending: Vec<Utxo>,
     intra_block_txids: HashSet<Txid>,
 }
 
@@ -87,11 +94,12 @@ impl BlockUtxoSet {
         Self {
             available,
             spent: Vec::new(),
+            pending: Vec::new(),
             intra_block_txids: HashSet::new(),
         }
     }
 
-    /// Take up to `n` UTXOs out of `available` at random and record them as spent.
+    /// Take up to `n` UTXOs out of `available` at random and record them as pending.
     fn take(&mut self, n: usize) -> Vec<Utxo> {
         let mut picked = Vec::with_capacity(n);
         for _ in 0..n {
@@ -100,10 +108,20 @@ impl BlockUtxoSet {
             }
             let i = random_range(self.available.len() as u64) as usize;
             let utxo = self.available.swap_remove(i);
-            self.spent.push(utxo.clone());
+            self.pending.push(utxo.clone());
             picked.push(utxo);
         }
         picked
+    }
+
+    /// The pending tx was added to the block; its inputs are now truly spent.
+    fn commit_pending(&mut self) {
+        self.spent.append(&mut self.pending);
+    }
+
+    /// The pending tx failed to build; its inputs are spendable again.
+    fn rollback_pending(&mut self) {
+        self.available.append(&mut self.pending);
     }
 
     /// Pick a UTXO some other raw tx in this block already claimed.
@@ -377,8 +395,10 @@ fn main() {
                 Corruption::None
             };
             let Some(tx) = kind.build(&client, &mut pool) else {
+                pool.rollback_pending();
                 continue;
             };
+            pool.commit_pending();
             // If this tx spends an output of an earlier raw tx in this block, the parent
             // must come first in the block's tx vector. Append at the end so we're
             // guaranteed to be after the parent
