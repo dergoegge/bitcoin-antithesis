@@ -12,8 +12,6 @@ INPUTFETCH=$(( $(rand_byte) % 17 ))
 # Pick from {1, 4} -- single byte mod 2 selects which one.
 if [ $(( $(rand_byte) % 2 )) -eq 0 ]; then PAR=1; else PAR=4; fi
 
-echo "[bitcoin-node-wrapper] inputfetchthreads=${INPUTFETCH} par=${PAR}" >&2
+echo "[bitcoin-node-wrapper] prevoutfetchthreads=${INPUTFETCH} par=${PAR}" >&2
 
-# Swap commented out lines for PR #31132
-#exec bitcoin-node "$@" "-inputfetchthreads=${INPUTFETCH}" "-par=${PAR}"
-exec bitcoin-node "$@" "-par=${PAR}"
+exec bitcoin-node "$@" "-prevoutfetchthreads=${INPUTFETCH}" "-par=${PAR}"
