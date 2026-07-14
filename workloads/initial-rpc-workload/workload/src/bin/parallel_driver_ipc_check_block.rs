@@ -87,14 +87,18 @@ async fn main() {
             let mut block: Block = match deserialize(&block_data) {
                 Ok(b) => b,
                 Err(e) => {
-                    eprintln!("Failed to deserialize template block: {}", e);
+                    antithesis_sdk::assert_unreachable!(
+                        "Failed to deserialize template block",
+                        &serde_json::json!({ "error": e.to_string() })
+                    );
                     return;
                 }
             };
             let Some(merkle_root) = block.compute_merkle_root() else {
-                eprintln!("Template block has no transactions");
+                antithesis_sdk::assert_unreachable!("Template block has no transactions");
                 return;
             };
+
             block.header.merkle_root = merkle_root;
             let block_data = serialize(&block);
 
