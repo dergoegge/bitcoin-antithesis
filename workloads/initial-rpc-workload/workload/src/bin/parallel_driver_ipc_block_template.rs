@@ -6,8 +6,6 @@ use bitcoin_antithesis_workload::{get_all_ipc_nodes, ipc, random_ipc_node, rando
 use bitcoin_capnp_types::mining_capnp::block_create_options;
 use tokio::task::LocalSet;
 
-use std::time::SystemTime;
-
 /// Build a coinbase Transaction from CoinbaseTx IPC fields.
 fn build_coinbase_tx(
     version: u32,
@@ -22,10 +20,14 @@ fn build_coinbase_tx(
         previous_output: OutPoint::new(Txid::all_zeros(), 0xffffffff),
         script_sig: ScriptBuf::from_bytes(script_sig_prefix.to_vec()),
         sequence: Sequence(sequence),
+        // `witness` is the raw 32-byte BIP141 witness reserved value, i.e. a
+        // single witness stack element — not a serialized witness. It must be
+        // preserved: with a witness commitment among the required outputs, a
+        // coinbase without it fails bad-witness-nonce-size.
         witness: if witness.is_empty() {
             Witness::new()
         } else {
-            bitcoin::consensus::encode::deserialize(witness).unwrap_or_else(|_| Witness::new())
+            Witness::from_slice(&[witness])
         },
     };
 
@@ -101,8 +103,9 @@ async fn main() {
                 }
             };
 
-            // getBlockHeader - should be 80 bytes
-            {
+            // getBlockHeader - should be 80 bytes; keep the decoded header
+            // around to reuse its version/timestamp for submitSolution.
+            let template_header: Option<bitcoin::block::Header> = {
                 let mut req = template_client.get_block_header_request();
                 req.get().get_context().unwrap().set_thread(thread.clone());
                 match req.send().promise.await {
@@ -116,14 +119,24 @@ async fn main() {
                                     &serde_json::json!({ "header_len": len })
                                 );
                                 println!("getBlockHeader: {} bytes", len);
+                                bitcoin::consensus::encode::deserialize(header).ok()
                             }
-                            Err(e) => eprintln!("getBlockHeader result error: {}", e),
+                            Err(e) => {
+                                eprintln!("getBlockHeader result error: {}", e);
+                                None
+                            }
                         },
-                        Err(e) => eprintln!("getBlockHeader response error: {}", e),
+                        Err(e) => {
+                            eprintln!("getBlockHeader response error: {}", e);
+                            None
+                        }
                     },
-                    Err(e) => eprintln!("getBlockHeader request failed: {}", e),
+                    Err(e) => {
+                        eprintln!("getBlockHeader request failed: {}", e);
+                        None
+                    }
                 }
-            }
+            };
 
             // getBlock - should be >= 80 bytes
             {
@@ -234,18 +247,17 @@ async fn main() {
                 }
             };
 
-            // 50% of the time, try to submit with nonce=0 (may work on regtest low difficulty)
+            // 50% of the time, try to submit with nonce=0 (the header hash
+            // meets the regtest target ~50% of the time). Reuse the template
+            // header's version and timestamp: the node chose them to be
+            // contextually valid, whereas our wall clock may not be (e.g.
+            // under time manipulation faults).
             if random_range(2) == 0 {
-                if let Some(ref coinbase) = coinbase_data {
+                if let (Some(coinbase), Some(header)) = (&coinbase_data, &template_header) {
                     let mut req = template_client.submit_solution_request();
                     req.get().get_context().unwrap().set_thread(thread.clone());
-                    req.get().set_version(0x20000000);
-                    req.get().set_timestamp(
-                        SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs() as u32,
-                    );
+                    req.get().set_version(header.version.to_consensus() as u32);
+                    req.get().set_timestamp(header.time);
                     req.get().set_nonce(0);
                     req.get().set_coinbase(coinbase);
                     match req.send().promise.await {
