@@ -1,3 +1,5 @@
+use bitcoin::consensus::encode::{deserialize, serialize};
+use bitcoin::Block;
 use bitcoin_antithesis_workload::{get_all_ipc_nodes, ipc, random_ipc_node};
 use bitcoin_capnp_types::mining_capnp::{block_check_options, block_create_options};
 use tokio::task::LocalSet;
@@ -76,6 +78,25 @@ async fn main() {
                     }
                 }
             };
+
+            // The node leaves the template header's merkle root unset: IPC
+            // mining clients are expected to finalize the coinbase and compute
+            // the merkle root themselves (see getCoinbaseMerklePath /
+            // AddMerkleRootAndCoinbase). checkBlock is called with
+            // check_merkle_root=true below, so fill it in first.
+            let mut block: Block = match deserialize(&block_data) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("Failed to deserialize template block: {}", e);
+                    return;
+                }
+            };
+            let Some(merkle_root) = block.compute_merkle_root() else {
+                eprintln!("Template block has no transactions");
+                return;
+            };
+            block.header.merkle_root = merkle_root;
+            let block_data = serialize(&block);
 
             println!(
                 "Got block of {} bytes for checkBlock testing",
