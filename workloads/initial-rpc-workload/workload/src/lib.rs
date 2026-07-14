@@ -196,27 +196,44 @@ pub fn assert_reorg_metrics(client: &Client, context: &str) {
     if let Ok(tips) = get_chain_tips(client) {
         let reorg_info = analyze_reorgs(&tips);
 
-        // Sometimes we see at least one fork (indicates reorg activity)
+        // Fork depth ladder: shows how deep reorg coverage actually gets.
         antithesis_sdk::assert_sometimes_greater_than!(
             reorg_info.fork_count,
             0,
             "Reorg detected: at least one fork exists",
             &serde_json::json!({ "context": context })
         );
-
-        // Sometimes we see deep reorgs (depth > 1)
+        antithesis_sdk::assert_sometimes_greater_than!(
+            reorg_info.max_fork_depth,
+            1,
+            "Fork depth greater than 1",
+            &serde_json::json!({ "context": context })
+        );
+        antithesis_sdk::assert_sometimes_greater_than!(
+            reorg_info.max_fork_depth,
+            6,
+            "Fork depth greater than 6",
+            &serde_json::json!({ "context": context })
+        );
         antithesis_sdk::assert_sometimes_greater_than!(
             reorg_info.max_fork_depth,
             16,
-            "Deep reorg detected: fork depth greater than 1",
+            "Fork depth greater than 16",
             &serde_json::json!({ "context": context })
         );
 
-        // Sometimes we see multiple forks simultaneously
+        // Fork count ladder: stale-tip entries accumulate over the run, so
+        // higher counts indicate sustained block-race / reorg activity.
+        antithesis_sdk::assert_sometimes_greater_than!(
+            reorg_info.fork_count,
+            1,
+            "Multiple forks exist simultaneously",
+            &serde_json::json!({ "context": context })
+        );
         antithesis_sdk::assert_sometimes_greater_than!(
             reorg_info.fork_count,
             16,
-            "Multiple forks detected simultaneously",
+            "More than 16 forks exist simultaneously",
             &serde_json::json!({ "context": context })
         );
     }
