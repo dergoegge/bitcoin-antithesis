@@ -233,7 +233,7 @@ pub fn assert_mempool_metrics(client: &Client, context: &str) {
             &serde_json::json!({ "context": context })
         );
 
-        // Sometimes mempool has significant transaction count (>10 txs)
+        // Sometimes mempool has significant transaction count
         antithesis_sdk::assert_sometimes_greater_than!(
             mempool.size,
             1000,
@@ -241,11 +241,14 @@ pub fn assert_mempool_metrics(client: &Client, context: &str) {
             &serde_json::json!({ "context": context })
         );
 
-        // Sometimes mempool has significant byte size (>10KB)
+        // Sometimes mempool memory usage approaches -maxmempool (eviction
+        // territory). Note: `bytes` (serialized size) can never exceed
+        // `maxmempool`, which caps `usage` (memory usage, always >= bytes),
+        // so usage is the right metric here.
         antithesis_sdk::assert_sometimes_greater_than!(
-            mempool.bytes,
-            mempool.maxmempool,
-            "Mempool exceeds -maxmepool in size",
+            mempool.usage,
+            mempool.maxmempool * 8 / 10,
+            "Mempool usage exceeds 80% of -maxmempool",
             &serde_json::json!({ "context": context })
         );
     }
