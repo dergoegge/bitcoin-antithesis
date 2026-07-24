@@ -98,7 +98,7 @@ COPY --from=builder /src/bitcoin/build/bin/bitcoind /usr/local/bin/bitcoind
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-cli /usr/local/bin/bitcoin-cli
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-node /usr/local/bin/bitcoin-node
 
-# Legacy entrypoint wrapper that fuzzes config (-prevoutfetchthreads=0..16, -par=1/4).
+# Legacy entrypoint wrapper that fuzzes config (-inputfetchthreads=0..16, -par=1/4).
 COPY bitcoin-node-wrapper.sh /usr/local/bin/bitcoin-node-wrapper
 RUN chmod +x /usr/local/bin/bitcoin-node-wrapper
 
