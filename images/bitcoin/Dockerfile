@@ -98,9 +98,15 @@ COPY --from=builder /src/bitcoin/build/bin/bitcoind /usr/local/bin/bitcoind
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-cli /usr/local/bin/bitcoin-cli
 COPY --from=builder /src/bitcoin/build/bin/bitcoin-node /usr/local/bin/bitcoin-node
 
-# Entrypoint wrapper that fuzzes config (-inputfetchthreads=0..16, -par=1/4).
+# Legacy entrypoint wrapper that fuzzes config (-prevoutfetchthreads=0..16, -par=1/4).
 COPY bitcoin-node-wrapper.sh /usr/local/bin/bitcoin-node-wrapper
 RUN chmod +x /usr/local/bin/bitcoin-node-wrapper
+
+# Swarm entrypoint wrapper: per-node config fuzzing with a persisted personality.
+# Supersedes bitcoin-node-wrapper (execs bitcoin-node directly). Selected via the
+# `entrypoint:` field in each workload's docker-compose.yaml.
+COPY swarm-entrypoint.sh /usr/local/bin/swarm-entrypoint
+RUN chmod +x /usr/local/bin/swarm-entrypoint
 
 COPY --from=builder /src/bitcoin/test/sanitizer_suppressions/tsan ./tsan.supp
 

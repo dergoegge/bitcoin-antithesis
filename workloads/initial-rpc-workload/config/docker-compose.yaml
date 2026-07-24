@@ -11,7 +11,7 @@ services:
         - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
         - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE1_SANITIZERS:-thread}
-    entrypoint: ["bitcoin-node-wrapper"]
+    entrypoint: ["swarm-entrypoint"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -25,8 +25,6 @@ services:
       - "-fallbackfee=0.0001"
       - "-addnode=node2:18444"
       - "-addnode=node3:18444"
-      - "-dbcache=4"
-      - "-maxmempool=5"
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
@@ -47,7 +45,7 @@ services:
         - BITCOIN_BRANCH=${NODE2_BRANCH:-master}
         - BITCOIN_REPO=${NODE2_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE2_SANITIZERS:-}
-    entrypoint: ["bitcoin-node-wrapper"]
+    entrypoint: ["swarm-entrypoint"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -61,10 +59,6 @@ services:
       - "-fallbackfee=0.0001"
       - "-addnode=node1:18444"
       - "-addnode=node3:18444"
-      - "-maxmempool=5"
-      - "-prune=1"
-      - "-dbcache=4"
-      - "-fastprune"
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
@@ -85,7 +79,7 @@ services:
         - BITCOIN_BRANCH=${NODE3_BRANCH:-master}
         - BITCOIN_REPO=${NODE3_REPO:-https://github.com/bitcoin/bitcoin.git}
         - SANITIZERS=${NODE3_SANITIZERS:-address}
-    entrypoint: ["bitcoin-node-wrapper"]
+    entrypoint: ["swarm-entrypoint"]
     command:
       - "-regtest"
       - "-datadir=/data"
@@ -99,8 +93,6 @@ services:
       - "-fallbackfee=0.0001"
       - "-addnode=node1:18444"
       - "-addnode=node2:18444"
-      - "-maxmempool=5"
-      - "-dbcache=4"
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
