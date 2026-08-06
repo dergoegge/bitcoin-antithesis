@@ -17,6 +17,29 @@ pub struct ChainTip {
     pub status: String, // "active", "valid-fork", "valid-headers", "headers-only", "invalid"
 }
 
+/// Subset of the getblockchaininfo RPC response
+#[derive(Debug, Deserialize, Clone)]
+pub struct BlockchainInfo {
+    pub blocks: u64,
+    pub bestblockhash: String,
+    /// Total work in the active chain, as a zero padded 64 digit hex string, so
+    /// lexicographic ordering matches numeric ordering.
+    pub chainwork: String,
+    /// Lowest-height complete block stored, i.e. all previous blocks have been
+    /// pruned (only present if pruning is enabled).
+    pub pruneheight: Option<u64>,
+}
+
+/// Subset of the getblockheader RPC response
+#[derive(Debug, Deserialize, Clone)]
+pub struct BlockHeader {
+    pub hash: String,
+    pub height: u64,
+    /// -1 if the block is not on the node's active chain.
+    pub confirmations: i64,
+    pub previousblockhash: Option<String>,
+}
+
 /// Response from getmempoolinfo RPC
 #[derive(Debug, Deserialize, Clone)]
 pub struct MempoolInfo {
@@ -163,6 +186,55 @@ pub fn round_to_satoshis(amount: f64) -> f64 {
 /// Get chain tips from a node
 pub fn get_chain_tips(client: &Client) -> Result<Vec<ChainTip>, jsonrpc::Error> {
     client.call("getchaintips", &[])
+}
+
+/// Get blockchain info from a node
+pub fn get_blockchain_info(client: &Client) -> Result<BlockchainInfo, jsonrpc::Error> {
+    client.call("getblockchaininfo", &[])
+}
+
+/// Get a block header from a node
+pub fn get_block_header(client: &Client, hash: &str) -> Result<BlockHeader, jsonrpc::Error> {
+    client.call("getblockheader", &[hash.into(), true.into()])
+}
+
+/// Height of the last block the node's active chain has in common with the
+/// chain ending in `target_tip`.
+///
+/// The node's headers for the target chain are walked back until one of them is
+/// found on the active chain. Returns `None` if the node doesn't know the target
+/// chain's headers or the walk exceeds `max_depth` steps, i.e. the fork point is
+/// unknown.
+pub fn find_fork_height(client: &Client, target_tip: &str, max_depth: u64) -> Option<u64> {
+    let mut hash = target_tip.to_string();
+    for _ in 0..max_depth {
+        let header = get_block_header(client, &hash).ok()?;
+        if header.confirmations >= 0 {
+            return Some(header.height);
+        }
+        hash = header.previousblockhash?;
+    }
+    None
+}
+
+/// Whether a node can never reorg onto `target_tip` because doing so requires
+/// disconnecting a block whose data it has already pruned.
+///
+/// Reorging to the target chain means disconnecting every block above the fork
+/// point on the node's own chain, which needs those blocks' (undo) data on disk.
+/// Below `pruneheight` that data is gone, so such a reorg can never complete and
+/// the node is permanently stuck on its current chain.
+pub fn reorg_blocked_by_pruning(
+    client: &Client,
+    info: &BlockchainInfo,
+    target_tip: &str,
+) -> Option<u64> {
+    let pruneheight = info.pruneheight?;
+    // The walk can't be longer than the node's own chain, since the fork point
+    // is at or below its tip height.
+    let fork_height = find_fork_height(client, target_tip, info.blocks + 1)?;
+    // Blocks fork_height + 1 ..= info.blocks have to be disconnected.
+    (fork_height + 1 < pruneheight).then_some(fork_height)
 }
 
 /// Analyze chain tips to detect reorg information
