@@ -63,17 +63,13 @@ jobs:
     - name: Checkout the code
       uses: actions/checkout@v3
 
-    - name: Create dot env
-      run: |
-        cat << 'EOF' > .env
-        ${{ secrets.ANTITHESIS_BRINK_PW }}
-        EOF
-
     - name: Install just
       run: |
         apt update && apt install -y curl
         just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
     - name: Launch Run on Antithesis
+      env:
+        ANTITHESIS_BRINK_PW: ${{ secrets.ANTITHESIS_BRINK_PW }}
       run: |
         just duration=${{ inputs.duration }} test-run-custom "${{ inputs.workload }}" "${{ inputs.container_faults_excluded }}" "${{ inputs.network_faults_excluded }}" "${{ inputs.node_to_disk_fault }}" "Duration: ${{ inputs.duration }}min, ${{ inputs.run_description }}" "${{ inputs.is_ephemeral }}"
