@@ -1,6 +1,7 @@
+use antithesis_sdk::random::random_choice;
 use bitcoin_antithesis_workload::{
     assert_mempool_metrics, assert_reorg_metrics, assert_wallet_metrics, create_client,
-    get_all_nodes, random_node, random_range,
+    get_all_nodes, random_node,
 };
 
 fn main() {
@@ -25,8 +26,9 @@ fn main() {
         }
     };
 
-    // Mine 1-3 blocks
-    let num_blocks = 1 + random_range(3);
+    // Mine 1, 2, 16, 32 or 128 blocks
+    let block_options = [1, 2, 16, 32, 128u64];
+    let num_blocks = *random_choice(&block_options).expect("block_options is non-empty");
 
     match client.call::<Vec<String>>(
         "generatetoaddress",
