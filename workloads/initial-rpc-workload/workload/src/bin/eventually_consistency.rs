@@ -10,7 +10,7 @@ fn main() {
 
     // Give the nodes some time to sync after faults stop, then take a single
     // snapshot and judge all properties on it.
-    thread::sleep(Duration::from_mins(11));
+    thread::sleep(Duration::from_secs(11 * 60));
 
     let mut snapshots: Vec<(String, Client, BlockchainInfo)> = Vec::new();
     let mut all_reachable = true;
