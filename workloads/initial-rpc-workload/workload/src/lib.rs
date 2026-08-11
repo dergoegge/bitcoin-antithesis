@@ -217,24 +217,58 @@ pub fn find_fork_height(client: &Client, target_tip: &str, max_depth: u64) -> Op
     None
 }
 
-/// Whether a node can never reorg onto `target_tip` because doing so requires
-/// disconnecting a block whose data it has already pruned.
+/// Number of recent blocks a pruned node keeps available for its peers, i.e.
+/// `NODE_NETWORK_LIMITED_MIN_BLOCKS`.
+pub const NETWORK_LIMITED_MIN_BLOCKS: u64 = 288;
+
+/// Slack Core allows around the limited window to avoid racing the tip.
+const NETWORK_LIMITED_RACE_BUFFER: u64 = 2;
+
+/// Whether a node can hand the block at `height` on its active chain to a peer.
 ///
-/// Reorging to the target chain means disconnecting every block above the fork
-/// point on the node's own chain, which needs those blocks' (undo) data on disk.
-/// Below `pruneheight` that data is gone, so such a reorg can never complete and
-/// the node is permanently stuck on its current chain.
-pub fn reorg_blocked_by_pruning(
-    client: &Client,
-    info: &BlockchainInfo,
-    target_tip: &str,
-) -> Option<u64> {
-    let pruneheight = info.pruneheight?;
-    // The walk can't be longer than the node's own chain, since the fork point
-    // is at or below its tip height.
-    let fork_height = find_fork_height(client, target_tip, info.blocks + 1)?;
+/// An unpruned node serves its whole chain. A pruned node has no data at all
+/// below `pruneheight`, and because it advertises `NODE_NETWORK_LIMITED` rather
+/// than `NODE_NETWORK` it only serves roughly the last
+/// `NETWORK_LIMITED_MIN_BLOCKS` blocks of what it does have. The window is sized
+/// generously here so that a node is only ever excused from converging when the
+/// block is certainly out of reach.
+pub fn can_serve_block(info: &BlockchainInfo, height: u64) -> bool {
+    let Some(pruneheight) = info.pruneheight else {
+        return true;
+    };
+    height >= pruneheight
+        && info.blocks.saturating_sub(height)
+            <= NETWORK_LIMITED_MIN_BLOCKS + NETWORK_LIMITED_RACE_BUFFER
+}
+
+/// Whether a node can never reorg away from its own chain above `fork_height`
+/// because it has already pruned a block it would have to disconnect.
+///
+/// Reorging means disconnecting every block above the fork point on the node's
+/// own chain, which needs those blocks' undo data on disk. Below `pruneheight`
+/// that data is gone, so the reorg can never complete and the node is
+/// permanently stuck on its current chain.
+pub fn disconnect_blocked_by_pruning(info: &BlockchainInfo, fork_height: u64) -> bool {
     // Blocks fork_height + 1 ..= info.blocks have to be disconnected.
-    (fork_height + 1 < pruneheight).then_some(fork_height)
+    info.pruneheight
+        .is_some_and(|pruneheight| fork_height + 1 < pruneheight)
+}
+
+/// Whether the blocks above `fork_height` on the most-work chain can't be
+/// obtained from anyone, so a node on a different chain can never connect it.
+///
+/// `best_chain` are the nodes already on the most-work chain, which are the only
+/// ones holding its block data: the branch above the fork point exists nowhere
+/// else. If none of them will serve the first block above the fork point, a
+/// lagging node is stuck on headers forever, no matter how long it waits. This
+/// is what pruning a fresh fork away does — the pruned node keeps mining on a
+/// chain it can no longer let anybody else follow.
+pub fn download_blocked_by_pruning(fork_height: u64, best_chain: &[&BlockchainInfo]) -> bool {
+    // The serve window of each node is contiguous and ends at the shared tip, so
+    // the lowest block needed is the one that decides this.
+    !best_chain
+        .iter()
+        .any(|info| can_serve_block(info, fork_height + 1))
 }
 
 /// Analyze chain tips to detect reorg information

@@ -1,6 +1,6 @@
 use bitcoin_antithesis_workload::{
-    create_client, get_all_nodes, get_blockchain_info, reorg_blocked_by_pruning, BlockchainInfo,
-    Client,
+    create_client, disconnect_blocked_by_pruning, download_blocked_by_pruning, find_fork_height,
+    get_all_nodes, get_blockchain_info, BlockchainInfo, Client,
 };
 use std::thread;
 use std::time::Duration;
@@ -58,23 +58,46 @@ fn main() {
         );
     }
 
-    // A pruned node can only reorg as far back as its block data reaches, so a
-    // node that would have to disconnect an already pruned block to follow the
-    // most-work chain is permanently stuck. That is a pruning limitation rather
-    // than a consistency violation, so those nodes are excluded from the
-    // convergence check below.
+    // Pruning can make convergence onto the most-work chain impossible in two
+    // ways, from either side of the fork:
+    //
+    //   - the lagging node pruned the undo data of a block it has to disconnect,
+    //     so it can never reorg away from its own chain
+    //   - every node on the most-work chain pruned the blocks above the fork
+    //     point, so the lagging node can never download that branch
+    //
+    // Both are pruning limitations rather than consistency violations, so those
+    // nodes are excluded from the convergence check below.
     let mut pruning_blocked: Vec<serde_json::Value> = Vec::new();
     if snapshot_complete {
         let best_idx = (0..snapshots.len())
             .max_by(|&a, &b| snapshots[a].2.chainwork.cmp(&snapshots[b].2.chainwork))
             .expect("snapshot is complete, so there is at least one node");
-        let best_tip = snapshots[best_idx].2.bestblockhash.clone();
+        let (_, best_client, best_info) = &snapshots[best_idx];
+        let best_tip = best_info.bestblockhash.clone();
 
-        for (i, (name, client, info)) in snapshots.iter().enumerate() {
-            if i == best_idx || info.bestblockhash == best_tip {
+        // The only nodes that hold the most-work chain's block data.
+        let best_chain: Vec<&BlockchainInfo> = snapshots
+            .iter()
+            .map(|(_, _, info)| info)
+            .filter(|info| info.bestblockhash == best_tip)
+            .collect();
+
+        for (name, client, info) in snapshots.iter() {
+            if info.bestblockhash == best_tip {
                 continue;
             }
-            let fork_height = reorg_blocked_by_pruning(client, info, &best_tip);
+            // The fork point is at or below the lagging node's tip height, so the
+            // walk can't be longer than its own chain. Either side of the fork
+            // can be missing the other's headers, so try both.
+            let fork_height = find_fork_height(client, &best_tip, info.blocks + 1).or_else(|| {
+                find_fork_height(best_client, &info.bestblockhash, info.blocks + 1)
+            });
+            let disconnect_blocked =
+                fork_height.is_some_and(|height| disconnect_blocked_by_pruning(info, height));
+            let download_blocked =
+                fork_height.is_some_and(|height| download_blocked_by_pruning(height, &best_chain));
+
             let details = serde_json::json!({
                 "node": name,
                 "fork_height": fork_height,
@@ -82,15 +105,28 @@ fn main() {
                 "height": info.blocks,
                 "tip": info.bestblockhash,
                 "best_tip": best_tip,
+                "best_height": best_info.blocks,
+                "best_chain_prune_heights": best_chain
+                    .iter()
+                    .map(|info| info.pruneheight)
+                    .collect::<Vec<Option<u64>>>(),
+                "disconnect_blocked": disconnect_blocked,
+                "download_blocked": download_blocked,
             });
 
             antithesis_sdk::assert_sometimes!(
-                fork_height.is_some(),
+                disconnect_blocked,
                 "A pruned node can't reorg onto the most-work chain because the fork point is below its pruneheight",
                 &details
             );
 
-            if fork_height.is_some() {
+            antithesis_sdk::assert_sometimes!(
+                download_blocked,
+                "A node can't sync onto the most-work chain because every node on it has pruned the blocks above the fork point",
+                &details
+            );
+
+            if disconnect_blocked || download_blocked {
                 pruning_blocked.push(details);
             }
         }
@@ -144,8 +180,10 @@ fn main() {
     //   - Some nodes are unavailable, which will be caught and reported by other property failures
     //   - All nodes are at the same height but have different tips, which can occur and is benign
     //     in the case of same height block races
-    //   - A pruned node would have to disconnect a block it already pruned to follow the most-work
-    //     chain, which it can never do (such nodes are excluded from the convergence check)
+    //   - Pruning has made following the most-work chain impossible for a node, either because it
+    //     would have to disconnect a block it already pruned, or because every node on that chain
+    //     has pruned the blocks above the fork point (such nodes are excluded from the convergence
+    //     check)
     antithesis_sdk::assert_always!(
         some_nodes_unavailable || same_height_block_race || fully_converged,
         "Some nodes are unavailable, a same height block race occured, or all nodes have converged to the same chain tip",
@@ -156,7 +194,7 @@ fn main() {
             "some_nodes_unavailable": some_nodes_unavailable,
             "same_height_block_race": same_height_block_race,
             "fully_converged": fully_converged,
-            "reorg_blocked_by_pruning": pruning_blocked
+            "blocked_by_pruning": pruning_blocked
         })
     );
 }
