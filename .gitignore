@@ -1,3 +1,5 @@
 target/
 volumes/
 .env
+# Bug write-ups on their way to other projects' issue trackers.
+reports/

@@ -1,0 +1,34 @@
+# Overlay for watching the interface while it is explored, locally.
+#
+# The application renders offscreen in a normal run, because nothing is looking.
+# This puts its window on your desktop instead, through the X socket, so you can
+# watch Bombadil drive it. Rendering stays in software either way, so nothing
+# about the application's behaviour changes.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.watch.yaml up -d node1 gui
+#   docker compose -f docker-compose.yaml -f docker-compose.watch.yaml run --rm health-checker
+#   docker exec -e BOMBADIL_TIME_LIMIT=10m gui \
+#       /opt/antithesis/test/v1/qml_gui/parallel_driver_explore.sh
+#
+# Needs a local X server. Qt's `vnc` platform plugin is the way to watch without
+# one -- QT_QPA_PLATFORM=vnc, publish 5900, point a viewer at it. It used to
+# crash inside `libqvnc.so` seconds into a run, but a full exploration run under
+# it is clean when retested, so that route is available if you ever need to
+# watch from a machine without a display.
+#
+# This file is for local use. Antithesis runs the environment from
+# docker-compose.yaml alone.
+services:
+  gui:
+    environment:
+      QT_QPA_PLATFORM: xcb
+      QT_QUICK_BACKEND: software
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      DISPLAY: ${DISPLAY:-:0}
+      # Copied in below, because the host's own path is under /run/user and the
+      # container has no business seeing the rest of that directory.
+      XAUTHORITY: /tmp/.Xauthority
+      BOMBADIL_TIME_LIMIT: 5m
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XAUTHORITY:-/dev/null}:/tmp/.Xauthority:ro

@@ -1,0 +1,138 @@
+# Antithesis environment for exploring the QML GUI against a live chain.
+#
+# The system under test is `gui`: `bitcoin-core-app`, which runs a full node
+# in-process, with the test automation bridge enabled so Bombadil can drive its
+# interface. `node1` is a plain bitcoind peer, and the workload container mines
+# blocks and sends payments between the two, so the interface being explored is
+# one whose chain and wallet are moving.
+services:
+  node1:
+    container_name: node1
+    hostname: node1
+    image: qml-gui-workload-node1:antithesis
+    build:
+      context: ../../../images/bitcoin
+      dockerfile: Dockerfile
+      network: host
+      args:
+        - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
+        - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
+        - SANITIZERS=${NODE1_SANITIZERS:-}
+    entrypoint: ["bitcoin-node-wrapper"]
+    command:
+      - "-regtest"
+      - "-nosettings"
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-addnode=gui:18444"
+      - "-dbcache=4"
+      - "-maxmempool=5"
+      - "-loglevelalways"
+      # Logging goes to the container's stdout, which is what Antithesis
+      # captures: with -printtoconsole=0 it lands in debug.log inside the
+      # datadir instead, and a triage report shows nothing the node did.
+      #
+      # Without a -debug category this is the default level -- blocks connecting,
+      # reorgs, warnings, wallet notifications -- which is what makes a run
+      # readable. Every category at 5 blocks a second is what a logging budget
+      # gets spent on instead.
+      - "-printtoconsole=1"
+      - "-rpcthreads=4"
+
+  # The application under test. Bombadil is in this image too and attaches to
+  # the bridge from a test command, because the bridge is a Unix domain socket
+  # and the driver has to share a filesystem with the application.
+  gui:
+    container_name: gui
+    hostname: gui
+    image: qml-gui-workload-gui:antithesis
+    build:
+      context: ../gui
+      dockerfile: Dockerfile
+      network: host
+      additional_contexts:
+        instrumentation: ../../../images/bitcoin
+      args:
+        - GUI_QML_REPO=${GUI_QML_REPO:-https://github.com/dergoegge/gui-qml.git}
+        - GUI_QML_BRANCH=${GUI_QML_BRANCH:-antithesis}
+        - BOMBADIL_REPO=${BOMBADIL_REPO:-https://github.com/dergoegge/bombadil.git}
+        - BOMBADIL_BRANCH=${BOMBADIL_BRANCH:-bombadil-bitcoin-qml}
+        # Set these to the commits the branches are at, so that a rebuild picks
+        # up new ones instead of reusing the cached clone:
+        #   GUI_QML_REV=$(git ls-remote <repo> <branch> | cut -f1) docker compose build gui
+        - GUI_QML_REV=${GUI_QML_REV:-unpinned}
+        - BOMBADIL_REV=${BOMBADIL_REV:-unpinned}
+        # Which sanitizer the application is built with; empty for none.
+        - SANITIZERS=${GUI_SANITIZERS-address}
+    command:
+      - "-regtest"
+      # No -nosettings here, but note it makes no difference: the environment
+      # appends one of its own to every container, so the application always
+      # runs with the settings file disabled and the first toggle of any option
+      # still throws out of WriteSettingsFile and takes it down. Measured by
+      # counting the "Command-line arg: settings=false" lines one startup logs:
+      # two when this list also carried the flag, one when it did not.
+      - "-datadir=/data"
+      - "-rpcallowip=0.0.0.0/0"
+      - "-rpcbind=0.0.0.0"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-server=1"
+      - "-listen=1"
+      - "-listenonion=0"
+      - "-fallbackfee=0.0001"
+      - "-addnode=node1:18444"
+      - "-dbcache=4"
+      - "-maxmempool=5"
+      # Onboarding is what normally decides whether the node prunes, and it is
+      # skipped here, so the choice is made explicitly instead of inherited.
+      - "-prune=0"
+      - "-loglevelalways"
+      # See node1: the application's node logs to stdout so the run can be read
+      # from the report. This is the same stream the Qt and QML messages use.
+      - "-printtoconsole=1"
+      - "-rpcthreads=4"
+    environment:
+      # How long one exploration run drives the interface before it finishes and
+      # Antithesis is free to start another.
+      - BOMBADIL_TIME_LIMIT=5m
+
+  # Waits for both nodes, funds the GUI's wallet, and signals setup_complete.
+  health-checker:
+    container_name: health-checker
+    hostname: health-checker
+    image: qml-gui-workload-workload:antithesis
+    build:
+      context: ../workload
+      dockerfile: Dockerfile
+      network: host
+    entrypoint: ["/health_checker"]
+    depends_on:
+      - node1
+      - gui
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - GUI_RPC_URL=http://user:password@gui:18443
+
+  # Chain-side test commands (invoked by Antithesis).
+  workload:
+    container_name: workload
+    hostname: workload
+    image: qml-gui-workload-workload:antithesis
+    build:
+      context: ../workload
+      dockerfile: Dockerfile
+      network: host
+    depends_on:
+      - node1
+      - gui
+    environment:
+      - NODE1_RPC_URL=http://user:password@node1:18443
+      - GUI_RPC_URL=http://user:password@gui:18443

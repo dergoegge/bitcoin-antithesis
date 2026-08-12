@@ -1,0 +1,22 @@
+[package]
+name = "qml-gui-workload"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+antithesis_sdk = "0.2"
+jsonrpc = "0.18"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "health_checker"
+path = "src/bin/health_checker.rs"
+
+[[bin]]
+name = "parallel_driver_blocks"
+path = "src/bin/parallel_driver_blocks.rs"
+
+[[bin]]
+name = "parallel_driver_tx_simple"
+path = "src/bin/parallel_driver_tx_simple.rs"

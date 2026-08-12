@@ -12,6 +12,8 @@ build-images:
     docker build {{no_cache}} -t initial-rpc-workload-config:antithesis workloads/initial-rpc-workload/config/
     docker compose -f workloads/ir-workload/config/docker-compose.yaml build
     docker build -t ir-workload-config:antithesis workloads/ir-workload/config/
+    docker compose -f workloads/qml-gui-workload/config/docker-compose.yaml build {{no_cache}}
+    docker build {{no_cache}} -t qml-gui-workload-config:antithesis workloads/qml-gui-workload/config/
 
 # Tag all images for the Antithesis registry
 tag:
@@ -23,6 +25,10 @@ tag:
     docker tag ir-workload-workload:antithesis {{registry}}/ir-workload-workload:antithesis
     docker tag ir-workload-ir-builder:antithesis {{registry}}/ir-workload-ir-builder:antithesis
     docker tag ir-workload-config:antithesis {{registry}}/ir-workload-config:antithesis
+    docker tag qml-gui-workload-node1:antithesis {{registry}}/qml-gui-workload-node1:antithesis
+    docker tag qml-gui-workload-gui:antithesis {{registry}}/qml-gui-workload-gui:antithesis
+    docker tag qml-gui-workload-workload:antithesis {{registry}}/qml-gui-workload-workload:antithesis
+    docker tag qml-gui-workload-config:antithesis {{registry}}/qml-gui-workload-config:antithesis
 
 # Build and tag all images
 build-and-tag: build-images tag
@@ -38,6 +44,10 @@ push:
     docker push {{registry}}/ir-workload-workload:antithesis
     docker push {{registry}}/ir-workload-ir-builder:antithesis
     docker push {{registry}}/ir-workload-config:antithesis
+    docker push {{registry}}/qml-gui-workload-node1:antithesis
+    docker push {{registry}}/qml-gui-workload-gui:antithesis
+    docker push {{registry}}/qml-gui-workload-workload:antithesis
+    docker push {{registry}}/qml-gui-workload-config:antithesis
 
 # Launch a test run on Antithesis
 test-run-basic workload:
