@@ -84,7 +84,7 @@ dependencies = [
 [[package]]
 name = "bitcoin-capnp-types"
 version = "0.1.0"
-source = "git+https://github.com/dergoegge/bitcoin-capnp-types.git?branch=updated-capnp-files#f5453d11e35098c3c9ebedecee7b6c64e3728961"
+source = "git+https://github.com/dergoegge/bitcoin-capnp-types.git?branch=updated-capnp-files#5299cc5c1bb71cdea4734e42652f69099c858bfd"
 dependencies = [
  "capnp",
  "capnpc",

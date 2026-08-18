@@ -264,12 +264,31 @@ async fn main() {
                         Ok(response) => match response.get() {
                             Ok(result) => {
                                 let accepted = result.get_result();
+                                let reason = result
+                                    .get_reason()
+                                    .ok()
+                                    .and_then(|r| r.to_str().ok())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let debug = result
+                                    .get_debug()
+                                    .ok()
+                                    .and_then(|d| d.to_str().ok())
+                                    .unwrap_or("")
+                                    .to_string();
                                 antithesis_sdk::assert_sometimes!(
                                     accepted,
                                     "IPC submitSolution sometimes succeeds on regtest",
-                                    &serde_json::json!({ "accepted": accepted })
+                                    &serde_json::json!({
+                                        "accepted": accepted,
+                                        "reason": reason,
+                                        "debug": debug,
+                                    })
                                 );
-                                println!("submitSolution: accepted={}", accepted);
+                                println!(
+                                    "submitSolution: accepted={} reason={} debug={}",
+                                    accepted, reason, debug
+                                );
                             }
                             Err(e) => eprintln!("submitSolution response error: {}", e),
                         },
