@@ -1,6 +1,6 @@
 use bitcoin_antithesis_workload::{
     create_client, disconnect_blocked_by_pruning, download_blocked_by_pruning, find_fork_height,
-    get_all_nodes, get_blockchain_info, BlockchainInfo, Client,
+    get_all_nodes, get_blockchain_info, set_network_active, BlockchainInfo, Client,
 };
 use std::thread;
 use std::time::Duration;
@@ -8,23 +8,38 @@ use std::time::Duration;
 fn main() {
     let nodes = get_all_nodes();
 
-    // Give the nodes some time to sync after faults stop, then take a single
-    // snapshot and judge all properties on it.
-    thread::sleep(Duration::from_secs(11 * 60));
-
-    let mut snapshots: Vec<(String, Client, BlockchainInfo)> = Vec::new();
+    let mut clients: Vec<(String, Client)> = Vec::new();
     let mut all_reachable = true;
 
     for (i, node_config) in nodes.iter().enumerate() {
         let name = format!("node{}", i + 1);
-        let client = match create_client(node_config) {
-            Ok(c) => c,
+        match create_client(node_config) {
+            Ok(c) => clients.push((name, c)),
             Err(e) => {
                 eprintln!("{} client creation failed: {}", name, e);
                 all_reachable = false;
-                continue;
             }
-        };
+        }
+    }
+
+    // Force every node to drop and re-establish its connections, then give them
+    // time to sync before taking a single snapshot and judging all properties
+    // on it.
+    for active in [false, true] {
+        for (name, client) in clients.iter() {
+            if let Err(e) = set_network_active(client, active) {
+                eprintln!("{} setnetworkactive {} failed: {}", name, active, e);
+                all_reachable = false;
+            }
+        }
+        thread::sleep(Duration::from_secs(5));
+    }
+
+    thread::sleep(Duration::from_secs(120));
+
+    let mut snapshots: Vec<(String, Client, BlockchainInfo)> = Vec::new();
+
+    for (name, client) in clients {
         match get_blockchain_info(&client) {
             Ok(info) => snapshots.push((name, client, info)),
             Err(e) => {

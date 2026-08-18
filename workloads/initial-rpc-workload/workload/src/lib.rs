@@ -193,6 +193,11 @@ pub fn get_blockchain_info(client: &Client) -> Result<BlockchainInfo, jsonrpc::E
     client.call("getblockchaininfo", &[])
 }
 
+/// Enable or disable a node's p2p networking
+pub fn set_network_active(client: &Client, active: bool) -> Result<bool, jsonrpc::Error> {
+    client.call("setnetworkactive", &[active.into()])
+}
+
 /// Get a block header from a node
 pub fn get_block_header(client: &Client, hash: &str) -> Result<BlockHeader, jsonrpc::Error> {
     client.call("getblockheader", &[hash.into(), true.into()])
