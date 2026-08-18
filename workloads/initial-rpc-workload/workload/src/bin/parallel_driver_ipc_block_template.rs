@@ -285,10 +285,6 @@ async fn main() {
                                         "debug": debug,
                                     })
                                 );
-                                println!(
-                                    "submitSolution: accepted={} reason={} debug={}",
-                                    accepted, reason, debug
-                                );
                             }
                             Err(e) => eprintln!("submitSolution response error: {}", e),
                         },
