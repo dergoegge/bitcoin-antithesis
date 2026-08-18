@@ -105,9 +105,8 @@ fn main() {
             // The fork point is at or below the lagging node's tip height, so the
             // walk can't be longer than its own chain. Either side of the fork
             // can be missing the other's headers, so try both.
-            let fork_height = find_fork_height(client, &best_tip, info.blocks + 1).or_else(|| {
-                find_fork_height(best_client, &info.bestblockhash, info.blocks + 1)
-            });
+            let fork_height = find_fork_height(client, &best_tip, info.blocks + 1)
+                .or_else(|| find_fork_height(best_client, &info.bestblockhash, info.blocks + 1));
             let disconnect_blocked =
                 fork_height.is_some_and(|height| disconnect_blocked_by_pruning(info, height));
             let download_blocked =

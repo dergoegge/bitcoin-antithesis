@@ -302,6 +302,135 @@ pub fn get_wallet_info(client: &Client) -> Result<WalletInfo, jsonrpc::Error> {
     client.call("getwalletinfo", &[])
 }
 
+/// Satoshis per BTC, i.e. `COIN`.
+pub const COIN: i64 = 100_000_000;
+
+/// `MAX_MONEY` from consensus/amount.h, in satoshis.
+pub const MAX_MONEY_SATS: i64 = 21_000_000 * COIN;
+
+/// `consensus.nSubsidyHalvingInterval` on regtest.
+const SUBSIDY_HALVING_INTERVAL: u64 = 150;
+
+/// Block subsidy in satoshis at `height`, mirroring `GetBlockSubsidy()`.
+fn block_subsidy_sats(height: u64) -> i64 {
+    let halvings = height / SUBSIDY_HALVING_INTERVAL;
+    if halvings >= 64 {
+        return 0;
+    }
+    (50 * COIN) >> halvings
+}
+
+/// Total subsidy in satoshis paid into the UTXO set by a chain of `height` blocks.
+///
+/// Starts at height 1: the genesis coinbase never enters the UTXO set. No set of wallets
+/// on one chain can hold more than this, since fees only redistribute existing coins.
+pub fn total_subsidy_issued_sats(height: u64) -> i64 {
+    let mut sats: i64 = 0;
+    let mut h = 1u64;
+    while h <= height {
+        let subsidy = block_subsidy_sats(h);
+        if subsidy == 0 {
+            break;
+        }
+        // Last height in the halving epoch containing `h`.
+        let epoch_end = (h / SUBSIDY_HALVING_INTERVAL + 1) * SUBSIDY_HALVING_INTERVAL - 1;
+        let last = epoch_end.min(height);
+        sats = sats.saturating_add(subsidy.saturating_mul((last - h + 1) as i64));
+        h = last + 1;
+    }
+    sats
+}
+
+/// Result of validating a JSON value that Core documents as a money amount. Carried as
+/// whole satoshis so that nothing downstream sums or compares amounts as floats.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Money {
+    /// A whole number of satoshis within `[-MAX_MONEY, MAX_MONEY]`.
+    Valid(i64),
+    /// Outside that range, or not finite. Reported as the raw BTC value.
+    OutOfRange(f64),
+    /// In range but not a whole satoshi, which is itself a defect.
+    SubSatoshi(f64),
+    /// Not a JSON number at all.
+    NotANumber,
+}
+
+/// Largest distance, in satoshis, tolerated between a reported amount and the whole satoshi
+/// it must represent. `MAX_MONEY` is 2.1e15 satoshis, inside the 2^53 range where doubles
+/// represent every integer, so `btc * COIN` rounds back exactly and this only absorbs the
+/// decimal literal's representation error.
+const SATOSHI_EPSILON: f64 = 0.01;
+
+/// Validate a field Core documents as a money amount and convert it to satoshis.
+///
+/// The bound is sign-agnostic — a `send` amount and a fee are legitimately negative — so
+/// callers check the sign themselves where Core documents one.
+pub fn check_money(value: &serde_json::Value) -> Money {
+    let Some(btc) = value.as_f64() else {
+        return Money::NotANumber;
+    };
+    let sats = btc * COIN as f64;
+    if !sats.is_finite() || sats.abs() > MAX_MONEY_SATS as f64 {
+        return Money::OutOfRange(btc);
+    }
+    if (sats - sats.round()).abs() > SATOSHI_EPSILON {
+        return Money::SubSatoshi(btc);
+    }
+    Money::Valid(sats.round() as i64)
+}
+
+/// Format satoshis as BTC for logging. Never used for comparisons.
+pub fn sats_to_btc_string(sats: i128) -> String {
+    let sign = if sats < 0 { "-" } else { "" };
+    let abs = sats.unsigned_abs();
+    let coin = COIN as u128;
+    format!("{}{}.{:08}", sign, abs / coin, abs % coin)
+}
+
+/// The balance buckets of one wallet, i.e. `getbalances.mine`. `used` only appears on
+/// `avoid_reuse` wallets, where those coins are excluded from `trusted`, so it is not
+/// double counted.
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct BalanceBuckets {
+    pub trusted: serde_json::Value,
+    pub untrusted_pending: serde_json::Value,
+    pub immature: serde_json::Value,
+    pub used: serde_json::Value,
+}
+
+impl BalanceBuckets {
+    /// The buckets as (name, raw value) pairs, in report order.
+    pub fn fields(&self) -> [(&'static str, &serde_json::Value); 4] {
+        [
+            ("trusted", &self.trusted),
+            ("untrusted_pending", &self.untrusted_pending),
+            ("immature", &self.immature),
+            ("used", &self.used),
+        ]
+    }
+}
+
+/// `getbalances.lastprocessedblock`, the block a wallet has scanned up to.
+#[derive(Debug, Deserialize, Clone)]
+pub struct LastProcessedBlock {
+    pub height: u64,
+}
+
+/// Subset of the getbalances RPC response
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct Balances {
+    pub mine: BalanceBuckets,
+    /// Absent on older branches; callers fall back to the chain height.
+    pub lastprocessedblock: Option<LastProcessedBlock>,
+}
+
+/// Get balances from a node's loaded wallet
+pub fn get_balances(client: &Client) -> Result<Balances, jsonrpc::Error> {
+    client.call("getbalances", &[])
+}
+
 /// Assert sometimes conditions for reorg metrics
 pub fn assert_reorg_metrics(client: &Client, context: &str) {
     if let Ok(tips) = get_chain_tips(client) {
@@ -443,5 +572,99 @@ pub fn assert_wallet_metrics(client: &Client, context: &str) {
         );
     } else {
         println!("Failed to get wallet info for context '{}'", context);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subsidy_matches_regtest_schedule() {
+        assert_eq!(total_subsidy_issued_sats(0), 0);
+        assert_eq!(total_subsidy_issued_sats(1), 50 * COIN);
+        // The first halving takes effect *at* height 150.
+        assert_eq!(total_subsidy_issued_sats(149), 149 * 50 * COIN);
+        assert_eq!(total_subsidy_issued_sats(150), 149 * 50 * COIN + 25 * COIN);
+        assert_eq!(
+            total_subsidy_issued_sats(299),
+            149 * 50 * COIN + 150 * 25 * COIN
+        );
+        assert_eq!(
+            total_subsidy_issued_sats(300),
+            149 * 50 * COIN + 150 * 25 * COIN + 12 * COIN + 50_000_000
+        );
+    }
+
+    #[test]
+    fn money_is_converted_to_exact_satoshis() {
+        for (btc, sats) in [
+            (serde_json::json!(1.5), 150_000_000),
+            (serde_json::json!(-1.5), -150_000_000),
+            (serde_json::json!(0), 0),
+            (serde_json::json!(0.00000001), 1),
+            (serde_json::json!(-0.00000001), -1),
+            (serde_json::json!(0.1), 10_000_000),
+            (serde_json::json!(20999999.99999999), 2_099_999_999_999_999),
+            (serde_json::json!(21000000.0), MAX_MONEY_SATS),
+            (serde_json::json!(-21000000.0), -MAX_MONEY_SATS),
+        ] {
+            assert_eq!(check_money(&btc), Money::Valid(sats), "for {}", btc);
+        }
+    }
+
+    #[test]
+    fn money_range_is_enforced() {
+        // One satoshi over MAX_MONEY, i.e. what an overflowed sum walks into.
+        assert_eq!(
+            check_money(&serde_json::json!(21000000.00000001)),
+            Money::OutOfRange(21000000.00000001)
+        );
+        assert_eq!(
+            check_money(&serde_json::json!(92233720368.54776)),
+            Money::OutOfRange(92233720368.54776)
+        );
+        assert!(matches!(
+            check_money(&serde_json::json!(-92233720368.54776)),
+            Money::OutOfRange(_)
+        ));
+        assert_eq!(
+            check_money(&serde_json::json!(0.000000005)),
+            Money::SubSatoshi(0.000000005)
+        );
+        assert_eq!(check_money(&serde_json::json!("1.5")), Money::NotANumber);
+        assert_eq!(check_money(&serde_json::Value::Null), Money::NotANumber);
+    }
+
+    #[test]
+    fn accumulating_satoshis_is_exact() {
+        fn sats(value: serde_json::Value) -> i128 {
+            match check_money(&value) {
+                Money::Valid(sats) => sats as i128,
+                other => panic!("unexpected {:?}", other),
+            }
+        }
+
+        // Why integers: as f64 these two amounts exceed the total they add up to, and
+        // the cluster supply bound is tight enough for that drift to report a violation
+        // that never happened.
+        let as_float = |value: serde_json::Value| value.as_f64().unwrap();
+        assert!(
+            as_float(serde_json::json!(0.1)) + as_float(serde_json::json!(0.2))
+                > as_float(serde_json::json!(0.3))
+        );
+        assert_eq!(
+            sats(serde_json::json!(0.1)) + sats(serde_json::json!(0.2)),
+            sats(serde_json::json!(0.3))
+        );
+
+        let total: i128 = (0..30).map(|_| sats(serde_json::json!(0.1))).sum();
+        assert_eq!(total, 3 * COIN as i128);
+        assert_eq!(sats_to_btc_string(total), "3.00000000");
+        assert_eq!(sats_to_btc_string(-1), "-0.00000001");
+        assert_eq!(
+            sats_to_btc_string(MAX_MONEY_SATS as i128),
+            "21000000.00000000"
+        );
     }
 }

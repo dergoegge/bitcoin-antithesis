@@ -93,6 +93,14 @@ name = "anytime_pruneblockchain"
 path = "src/bin/anytime_pruneblockchain.rs"
 
 [[bin]]
+name = "anytime_wallet_amounts"
+path = "src/bin/anytime_wallet_amounts.rs"
+
+[[bin]]
+name = "anytime_supply_bound"
+path = "src/bin/anytime_supply_bound.rs"
+
+[[bin]]
 name = "serial_driver_tx_bulkdata"
 path = "src/bin/serial_driver_tx_bulkdata.rs"
 
