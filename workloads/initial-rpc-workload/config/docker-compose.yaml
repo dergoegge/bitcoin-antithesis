@@ -25,12 +25,9 @@ services:
       - "-fallbackfee=0.0001"
       - "-addnode=node2:18444"
       - "-addnode=node3:18444"
-      - "-dbcache=4"
-      - "-maxmempool=5"
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
-      - "-rpcthreads=4"
       - "-ipcbind=unix"
     volumes:
       - ./volumes/node1:/data
@@ -61,14 +58,9 @@ services:
       - "-fallbackfee=0.0001"
       - "-addnode=node1:18444"
       - "-addnode=node3:18444"
-      - "-maxmempool=5"
-      - "-prune=1"
-      - "-dbcache=4"
-      - "-fastprune"
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
-      - "-rpcthreads=4"
       - "-ipcbind=unix"
     volumes:
       - ./volumes/node2:/data
@@ -99,12 +91,9 @@ services:
       - "-fallbackfee=0.0001"
       - "-addnode=node1:18444"
       - "-addnode=node2:18444"
-      - "-maxmempool=5"
-      - "-dbcache=4"
       - "-loglevelalways"
       - "-printtoconsole=0"
       - "-debug"
-      - "-rpcthreads=4"
       - "-ipcbind=unix"
     volumes:
       - ./volumes/node3:/data
