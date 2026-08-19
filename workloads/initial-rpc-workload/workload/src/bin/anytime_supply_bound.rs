@@ -108,13 +108,6 @@ fn main() {
             return;
         }
         let issued = total_subsidy_issued_sats(height);
-        println!(
-            "[supply_bound] tip={} height={} total={} issued={} (BTC)",
-            hash,
-            height,
-            sats_to_btc_string(total),
-            sats_to_btc_string(issued as i128)
-        );
         antithesis_sdk::assert_always!(
             total <= issued as i128,
             "Coins across all wallets do not exceed the subsidy issued",

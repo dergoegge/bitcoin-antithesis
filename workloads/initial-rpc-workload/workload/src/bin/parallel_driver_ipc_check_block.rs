@@ -158,7 +158,6 @@ async fn main() {
                                 "IPC checkBlock(merkle=true, pow=true) sometimes passes on regtest",
                                 &serde_json::json!({ "valid": valid })
                             );
-                            println!("checkBlock(merkle=true, pow=true): valid={}", valid);
                         }
                         Err(e) => eprintln!("checkBlock(pow=true) response error: {}", e),
                     },

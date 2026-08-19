@@ -118,7 +118,6 @@ async fn main() {
                                     "IPC block header is 80 bytes",
                                     &serde_json::json!({ "header_len": len })
                                 );
-                                println!("getBlockHeader: {} bytes", len);
                                 bitcoin::consensus::encode::deserialize(header).ok()
                             }
                             Err(e) => {
@@ -152,7 +151,6 @@ async fn main() {
                                     "IPC block is at least 80 bytes",
                                     &serde_json::json!({ "block_len": len })
                                 );
-                                println!("getBlock: {} bytes", len);
                             }
                             Err(e) => eprintln!("getBlock result error: {}", e),
                         },
@@ -177,7 +175,6 @@ async fn main() {
                                     "IPC block template has more than 1 tx fee (mempool txs)",
                                     &serde_json::json!({ "tx_fee_count": count })
                                 );
-                                println!("getTxFees: {} entries", count);
                             }
                             Err(e) => eprintln!("getTxFees result error: {}", e),
                         },

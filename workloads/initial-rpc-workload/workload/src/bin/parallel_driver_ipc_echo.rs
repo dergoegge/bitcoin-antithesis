@@ -51,7 +51,6 @@ async fn main() {
                                     "received": echoed
                                 })
                             );
-                            println!("Echo test passed: sent='{}', got='{}'", test_string, echoed);
                         }
                         Err(e) => eprintln!("Failed to get echo result: {}", e),
                     },

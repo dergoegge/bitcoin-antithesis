@@ -52,10 +52,6 @@ fn main() {
         let all_same = block_hashes.iter().all(|(_, hash)| hash == first_hash);
 
         if all_same {
-            println!(
-                "eventually_consistent: all nodes converged to the same chain tip: {}",
-                first_hash
-            );
             converged = true;
             break;
         }

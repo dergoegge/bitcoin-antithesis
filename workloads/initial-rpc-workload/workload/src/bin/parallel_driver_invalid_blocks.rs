@@ -487,25 +487,6 @@ fn main() {
             &details
         );
 
-        let outcome = match &hash {
-            Some(h) => format!("accepted: {h}"),
-            None => format!("rejected: {}", err_msg.as_deref().unwrap_or("")),
-        };
-        let line = format!(
-            "[invalid-blocks] generateblock #{} to {} (mempool_txs={}, raw_txs={}, corruption={}) -> {}",
-            block_num + 1,
-            addr,
-            mempool_count,
-            raw_count,
-            applied.name(),
-            outcome
-        );
-        if accepted {
-            println!("{line}");
-        } else {
-            eprintln!("{line}");
-        }
-
         assert_reorg_metrics(&client, "after_generateblock");
         assert_mempool_metrics(&client, "after_generateblock");
         assert_wallet_metrics(&client, "after_generateblock");

@@ -37,7 +37,6 @@ async fn main() {
                                 "IPC isTestChain returns true on regtest",
                                 &serde_json::json!({ "is_test_chain": is_test })
                             );
-                            println!("isTestChain: {}", is_test);
                         }
                         Err(e) => eprintln!("isTestChain response error: {}", e),
                     },
@@ -58,7 +57,6 @@ async fn main() {
                                 "IPC isInitialBlockDownload eventually returns false",
                                 &serde_json::json!({ "is_ibd": is_ibd })
                             );
-                            println!("isInitialBlockDownload: {}", is_ibd);
                         }
                         Err(e) => eprintln!("isInitialBlockDownload response error: {}", e),
                     },
@@ -89,7 +87,6 @@ async fn main() {
                                             "IPC getTip height eventually exceeds 100",
                                             &serde_json::json!({ "height": height })
                                         );
-                                        println!("getTip: height={}", height);
                                     }
                                     Err(e) => eprintln!("getTip result error: {}", e),
                                 }
