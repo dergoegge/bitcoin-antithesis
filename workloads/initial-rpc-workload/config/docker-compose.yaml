@@ -144,6 +144,9 @@ services:
       - NODE1_IPC_SOCKET=/ipc/node1/regtest/node.sock
       - NODE2_IPC_SOCKET=/ipc/node2/regtest/node.sock
       - NODE3_IPC_SOCKET=/ipc/node3/regtest/node.sock
+      # Has to stay below the test run's duration, or the eventually driver is
+      # stopped before it asserts anything.
+      - EVENTUALLY_RETRY_BUDGET_SECS=3600
     volumes:
       - ./volumes/node1:/ipc/node1
       - ./volumes/node2:/ipc/node2

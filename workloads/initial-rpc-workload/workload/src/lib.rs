@@ -30,16 +30,6 @@ pub struct BlockchainInfo {
     pub pruneheight: Option<u64>,
 }
 
-/// Subset of the getblockheader RPC response
-#[derive(Debug, Deserialize, Clone)]
-pub struct BlockHeader {
-    pub hash: String,
-    pub height: u64,
-    /// -1 if the block is not on the node's active chain.
-    pub confirmations: i64,
-    pub previousblockhash: Option<String>,
-}
-
 /// Response from getmempoolinfo RPC
 #[derive(Debug, Deserialize, Clone)]
 pub struct MempoolInfo {
@@ -198,28 +188,35 @@ pub fn set_network_active(client: &Client, active: bool) -> Result<bool, jsonrpc
     client.call("setnetworkactive", &[active.into()])
 }
 
-/// Get a block header from a node
-pub fn get_block_header(client: &Client, hash: &str) -> Result<BlockHeader, jsonrpc::Error> {
-    client.call("getblockheader", &[hash.into(), true.into()])
+/// Get the hash of the block at `height` on a node's active chain
+pub fn get_block_hash(client: &Client, height: u64) -> Result<String, jsonrpc::Error> {
+    client.call("getblockhash", &[height.into()])
 }
 
-/// Height of the last block the node's active chain has in common with the
-/// chain ending in `target_tip`.
+/// Height of the highest block that two nodes have in common, i.e. the point at
+/// which their active chains fork.
 ///
-/// The node's headers for the target chain are walked back until one of them is
-/// found on the active chain. Returns `None` if the node doesn't know the target
-/// chain's headers or the walk exceeds `max_depth` steps, i.e. the fork point is
-/// unknown.
-pub fn find_fork_height(client: &Client, target_tip: &str, max_depth: u64) -> Option<u64> {
-    let mut hash = target_tip.to_string();
-    for _ in 0..max_depth {
-        let header = get_block_header(client, &hash).ok()?;
-        if header.confirmations >= 0 {
-            return Some(header.height);
+/// Both chains contain every block below their fork point and none of the blocks
+/// above it, so the fork point is found by bisecting the heights up to
+/// `max_height`, which has to be a height both nodes have a block at, i.e. at
+/// most the lower of the two tips. Only each node's own active chain is
+/// consulted, so the answer doesn't depend on either of them having seen the
+/// other's headers. Returns `None` if a node stops answering mid-search.
+pub fn find_fork_height(a: &Client, b: &Client, max_height: u64) -> Option<u64> {
+    // Genesis is shared by definition, and nothing is known about max_height + 1
+    // yet, which the search treats as unshared to settle on max_height when the
+    // chains don't fork below it at all.
+    let mut shared = 0;
+    let mut unshared = max_height + 1;
+    while unshared - shared > 1 {
+        let height = shared + (unshared - shared) / 2;
+        if get_block_hash(a, height).ok()? == get_block_hash(b, height).ok()? {
+            shared = height;
+        } else {
+            unshared = height;
         }
-        hash = header.previousblockhash?;
     }
-    None
+    Some(shared)
 }
 
 /// Number of recent blocks a pruned node keeps available for its peers, i.e.
