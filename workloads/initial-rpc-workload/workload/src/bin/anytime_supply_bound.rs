@@ -61,13 +61,22 @@ fn main() {
         match get_balances(client) {
             Ok(balances) => {
                 let mut wallet_total: i128 = 0;
-                for (_, value) in balances.mine.fields() {
+                let mut buckets = serde_json::Map::new();
+                for (bucket, value) in balances.mine.fields() {
                     if let Money::Valid(amount) = check_money(value) {
                         wallet_total += amount as i128;
+                        buckets.insert(bucket.to_string(), json!(amount));
                     }
                 }
                 total += wallet_total;
-                observed.push(json!({ "node": name, "balance_sats": wallet_total }));
+                observed.push(json!({
+                    "node": name,
+                    "balance_sats": wallet_total,
+                    // Which bucket carries the total is what a violation turns on: a
+                    // bucket this build reports and the parser drops looks like coins
+                    // out of nowhere.
+                    "buckets_sats": buckets,
+                }));
             }
             Err(e) => {
                 // Fewer coins visible cannot break an upper bound.

@@ -386,7 +386,13 @@ pub fn sats_to_btc_string(sats: i128) -> String {
 
 /// The balance buckets of one wallet, i.e. `getbalances.mine`. `used` only appears on
 /// `avoid_reuse` wallets, where those coins are excluded from `trusted`, so it is not
-/// double counted.
+/// double counted. `nonmempool` is the correction for wallet transactions that are in
+/// neither a block nor the mempool: `trusted` credits their inputs back as if they had
+/// never been sent, and this bucket subtracts what they would spend. It is signed, and
+/// omitting it overstates the wallet by the value of every dropped transaction.
+///
+/// Buckets absent from the response deserialize to null and are skipped by callers, so
+/// this parses against branches that predate any individual bucket.
 #[derive(Debug, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct BalanceBuckets {
@@ -394,17 +400,25 @@ pub struct BalanceBuckets {
     pub untrusted_pending: serde_json::Value,
     pub immature: serde_json::Value,
     pub used: serde_json::Value,
+    pub nonmempool: serde_json::Value,
 }
 
 impl BalanceBuckets {
     /// The buckets as (name, raw value) pairs, in report order.
-    pub fn fields(&self) -> [(&'static str, &serde_json::Value); 4] {
+    pub fn fields(&self) -> [(&'static str, &serde_json::Value); 5] {
         [
             ("trusted", &self.trusted),
             ("untrusted_pending", &self.untrusted_pending),
             ("immature", &self.immature),
             ("used", &self.used),
+            ("nonmempool", &self.nonmempool),
         ]
+    }
+
+    /// Whether a bucket is a signed correction rather than a quantity of coins, i.e.
+    /// whether a negative value is expected rather than a bug.
+    pub fn is_signed(bucket: &str) -> bool {
+        bucket == "nonmempool"
     }
 }
 
@@ -589,6 +603,35 @@ mod tests {
             total_subsidy_issued_sats(300),
             149 * 50 * COIN + 150 * 25 * COIN + 12 * COIN + 50_000_000
         );
+    }
+
+    #[test]
+    fn balance_buckets_carry_the_signed_nonmempool_correction() {
+        // node1 of the run where the supply bound tripped: dropping `nonmempool`
+        // overstated the wallet by 207.49997 BTC.
+        let balances: Balances = serde_json::from_value(serde_json::json!({
+            "mine": {
+                "trusted": 2350.27372993,
+                "untrusted_pending": 0.0,
+                "immature": 3275.0,
+                "nonmempool": -207.49997,
+            }
+        }))
+        .unwrap();
+
+        let total: i128 = balances
+            .mine
+            .fields()
+            .iter()
+            .filter_map(|(_, value)| match check_money(value) {
+                Money::Valid(amount) => Some(amount as i128),
+                _ => None,
+            })
+            .sum();
+
+        assert_eq!(total, 541_777_375_993);
+        assert!(BalanceBuckets::is_signed("nonmempool"));
+        assert!(!BalanceBuckets::is_signed("trusted"));
     }
 
     #[test]

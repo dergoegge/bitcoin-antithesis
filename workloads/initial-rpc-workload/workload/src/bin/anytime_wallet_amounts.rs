@@ -7,7 +7,7 @@
 
 use bitcoin_antithesis_workload::{
     check_money, create_client, get_all_nodes, get_balances, get_blockchain_info,
-    sats_to_btc_string, total_subsidy_issued_sats, Balances, Client, Money,
+    sats_to_btc_string, total_subsidy_issued_sats, BalanceBuckets, Balances, Client, Money,
 };
 use serde_json::{json, Value};
 
@@ -91,11 +91,12 @@ fn check_balances(node: &str, balances: &Balances, bound: Option<i64>) {
         match check_money(value) {
             Money::Valid(amount) => {
                 total += amount as i128;
-                if amount < 0 {
+                if amount < 0 && !BalanceBuckets::is_signed(name) {
                     bad.push(json!({ "field": name, "value": value, "reason": "negative" }));
                 }
             }
-            // `used` is only present on avoid_reuse wallets.
+            // `used` is only present on avoid_reuse wallets, `nonmempool` only on
+            // branches that report it.
             Money::NotANumber if value.is_null() => {}
             other => bad.push(offender(name, value, other)),
         }
