@@ -1,127 +1,191 @@
 set dotenv-load
+set positional-arguments
 
 registry := "us-central1-docker.pkg.dev/molten-verve-216720/brink-repository"
+api := "https://brink.antithesis.com/api"
 duration := "30"
 report_recipients := env("ANTITHESIS_REPORT_RECIPIENTS", "niklas@brink.dev")
 fault_profile := "full"
 no_cache := ""
 
+# Every workload with a config/docker-compose.yaml. Add new ones here only.
+workloads := "initial-rpc-workload ir-workload"
+
+_default:
+    @just --list --unsorted
+
+# --- helpers ----------------------------------------------------------------
+
+# Refuse to run without a sudo prompt, so an LLM can't fire these off.
+[private]
+_guard:
+    @sudo true # llm guard
+
+# All images belonging to one workload (compose-derived + its config image)
+[private]
+images w:
+    @docker compose -f workloads/$1/config/docker-compose.yaml config --images | sort -u
+    @echo "$1-config:antithesis"
+
+# All images across every workload, deduplicated
+[private]
+all-images:
+    @for w in {{workloads}}; do just images $w; done | sort -u
+
+# Run a per-workload recipe once per workload, e.g. `just _each build-workload`
+[private]
+_each recipe:
+    @for w in {{workloads}}; do just $1 $w; done
+
+# POST a params object to an Antithesis endpoint
+[private]
+_launch endpoint params: _guard
+    #!/usr/bin/env bash
+    set -euo pipefail
+    date
+    curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
+      -X POST "{{api}}/$1" \
+      -H 'content-type: application/json' \
+      -d "$(jq -n --argjson p "$2" '{params: $p}')"
+
+# Parse a Moment.from({...}) string into {session_id, input_hash, vtime}
+[private]
+moment-json moment:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    m="$1"
+    qp() { sed -n "s/.*$1: \"\([^\"]*\)\".*/\1/p" <<<"$m"; }
+    session_id=$(qp session_id)
+    input_hash=$(qp input_hash)
+    vtime=$(sed -n 's/.*vtime: \([0-9.]*\).*/\1/p' <<<"$m")
+    [[ -z "$session_id" ]] && echo "Failed to parse session_id" >&2 && exit 1
+    [[ -z "$input_hash" ]] && echo "Failed to parse input_hash" >&2 && exit 1
+    [[ -z "$vtime" ]] && echo "Failed to parse vtime" >&2 && exit 1
+    jq -n --arg s "$session_id" --arg h "$input_hash" --arg v "$vtime" \
+      '{session_id: $s, input_hash: $h, vtime: $v}'
+
+# --- images -----------------------------------------------------------------
+
+# Build every image of a single workload
+[group('images')]
+build-workload w:
+    docker compose -f workloads/$1/config/docker-compose.yaml build {{no_cache}}
+    docker build {{no_cache}} -t $1-config:antithesis workloads/$1/config/
+
+# Tag every image of a single workload for the Antithesis registry
+[group('images')]
+tag-workload w:
+    @just images $1 | xargs -I{} docker tag {} {{registry}}/{}
+
+# Push every image of a single workload
+[group('images')]
+push-workload w: _guard
+    @just images $1 | xargs -I{} sh -c 'docker tag "$0" "{{registry}}/$0" && docker push "{{registry}}/$0"'
+
 # Build all images
-build-images:
-    docker compose -f workloads/initial-rpc-workload/config/docker-compose.yaml build {{no_cache}}
-    docker build {{no_cache}} -t initial-rpc-workload-config:antithesis workloads/initial-rpc-workload/config/
-    docker compose -f workloads/ir-workload/config/docker-compose.yaml build
-    docker build -t ir-workload-config:antithesis workloads/ir-workload/config/
+[group('images')]
+build-images: (_each "build-workload")
 
 # Tag all images for the Antithesis registry
+[group('images')]
 tag:
-    docker tag bitcoin-node1:antithesis {{registry}}/bitcoin-node1:antithesis
-    docker tag bitcoin-node2:antithesis {{registry}}/bitcoin-node2:antithesis
-    docker tag bitcoin-node3:antithesis {{registry}}/bitcoin-node3:antithesis
-    docker tag initial-rpc-workload-workload:antithesis {{registry}}/initial-rpc-workload-workload:antithesis
-    docker tag initial-rpc-workload-config:antithesis {{registry}}/initial-rpc-workload-config:antithesis
-    docker tag ir-workload-workload:antithesis {{registry}}/ir-workload-workload:antithesis
-    docker tag ir-workload-ir-builder:antithesis {{registry}}/ir-workload-ir-builder:antithesis
-    docker tag ir-workload-config:antithesis {{registry}}/ir-workload-config:antithesis
-
-# Build and tag all images
-build-and-tag: build-images tag
+    @just all-images | xargs -I{} docker tag {} {{registry}}/{}
 
 # Push all images to the registry
-push:
-    sudo true # llm guard
-    docker push {{registry}}/bitcoin-node1:antithesis
-    docker push {{registry}}/bitcoin-node2:antithesis
-    docker push {{registry}}/bitcoin-node3:antithesis
-    docker push {{registry}}/initial-rpc-workload-workload:antithesis
-    docker push {{registry}}/initial-rpc-workload-config:antithesis
-    docker push {{registry}}/ir-workload-workload:antithesis
-    docker push {{registry}}/ir-workload-ir-builder:antithesis
-    docker push {{registry}}/ir-workload-config:antithesis
+[group('images')]
+push: _guard
+    @just all-images | xargs -I{} docker push {{registry}}/{}
+
+# Build and tag all images
+[group('images')]
+build-and-tag: build-images tag
+
+# Build, tag, and push all images
+[group('images')]
+build-and-push: build-and-tag push
+
+# --- antithesis -------------------------------------------------------------
 
 # Launch a test run on Antithesis
+[group('antithesis')]
 test-run-basic workload:
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo true # llm guard
-    date
-    curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
-      -X POST https://brink.antithesis.com/api/v1/launch/basic_test \
-      -d '{"params": { "antithesis.description":"Antithesis test template for Bitcoin on master",
-          "antithesis.duration":"{{duration}}",
-          "antithesis.config_image":"{{workload}}-config:antithesis",
-          "antithesis.images":"",
-          "antithesis.report.recipients":"{{report_recipients}}"
-          } }'
+    params=$(jq -n \
+      --arg desc "Antithesis test template for Bitcoin on master" \
+      --arg dur "{{duration}}" \
+      --arg cfg "$1-config:antithesis" \
+      --arg rcpt "{{report_recipients}}" \
+      '{"antithesis.description": $desc,
+        "antithesis.duration": $dur,
+        "antithesis.config_image": $cfg,
+        "antithesis.images": "",
+        "antithesis.report.recipients": $rcpt}')
+    just _launch v1/launch/basic_test "$params"
 
+# Launch a test run with fault exclusions
+[group('antithesis')]
 test-run-custom workload container_faults_excluded network_faults_excluded node_to_disk_fault description is_ephemeral="false":
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo true # llm guard
-    date
     fill_disk="false"
-    if [[ -n "{{node_to_disk_fault}}" ]]; then
+    if [[ -n "$4" ]]; then
         fill_disk="true"
     fi
-    curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
-      -X POST https://brink.antithesis.com/api/v1/launch/brink \
-      -d '{"params": { "antithesis.description":"{{description}}",
-          "antithesis.duration":"{{duration}}",
-          "antithesis.config_image":"{{workload}}-config:antithesis",
-          "antithesis.test_name":"{{workload}}",
-          "antithesis.images":"",
-          "antithesis.is_ephemeral":"{{is_ephemeral}}",
-          "custom.fill_disk":"'"$fill_disk"'",
-          "custom.node_to_disk_fault":"{{node_to_disk_fault}}",
-          "custom.fault_profile": "{{fault_profile}}",
-          "custom.exclusion_container_fault": "{{container_faults_excluded}}",
-          "custom.exclusion_network_fault": "{{network_faults_excluded}}",
-          "antithesis.report.recipients":"{{report_recipients}}"
-          } }'
+    params=$(jq -n \
+      --arg desc "$5" \
+      --arg dur "{{duration}}" \
+      --arg cfg "$1-config:antithesis" \
+      --arg name "$1" \
+      --arg eph "$6" \
+      --arg fill "$fill_disk" \
+      --arg disknode "$4" \
+      --arg profile "{{fault_profile}}" \
+      --arg cfaults "$2" \
+      --arg nfaults "$3" \
+      --arg rcpt "{{report_recipients}}" \
+      '{"antithesis.description": $desc,
+        "antithesis.duration": $dur,
+        "antithesis.config_image": $cfg,
+        "antithesis.test_name": $name,
+        "antithesis.images": "",
+        "antithesis.is_ephemeral": $eph,
+        "custom.fill_disk": $fill,
+        "custom.node_to_disk_fault": $disknode,
+        "custom.fault_profile": $profile,
+        "custom.exclusion_container_fault": $cfaults,
+        "custom.exclusion_network_fault": $nfaults,
+        "antithesis.report.recipients": $rcpt}')
+    just _launch v1/launch/brink "$params"
 
 # Launch debugger with moment string, e.g.:
 # just launch-debugger 'Moment.from({ session_id: "abc-123", input_hash: "456", vtime: 123.45 })' 'debugging issue X'
+[group('antithesis')]
 launch-debugger moment debug_description:
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo true # llm guard
-    session_id=$(echo '{{moment}}' | sed -n 's/.*session_id: "\([^"]*\)".*/\1/p')
-    input_hash=$(echo '{{moment}}' | sed -n 's/.*input_hash: "\([^"]*\)".*/\1/p')
-    vtime=$(echo '{{moment}}' | sed -n 's/.*vtime: \([0-9.]*\).*/\1/p')
-    echo "Parsed values: session_id=$session_id, input_hash=$input_hash, vtime=$vtime"
-    [[ -z "$session_id" ]] && echo "Failed to parse session_id" && exit 1
-    [[ -z "$input_hash" ]] && echo "Failed to parse input_hash" && exit 1
-    [[ -z "$vtime" ]] && echo "Failed to parse vtime" && exit 1
-    date
-    curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
-      -X POST https://brink.antithesis.com/api/interactivity/v1/launch/debugging \
-      -d '{"params": {
-      "antithesis.debugging.session_id":"'"$session_id"'",
-      "antithesis.debugging.input_hash":"'"$input_hash"'",
-      "antithesis.debugging.vtime":"'"$vtime"'",
-      "antithesis.report.recipients":"{{report_recipients}}",
-      "antithesis.event_description":"{{debug_description}}"
-      }}'
+    m=$(just moment-json "$1")
+    echo "Parsed values: $(jq -c . <<<"$m")"
+    params=$(jq -n --argjson m "$m" \
+      --arg rcpt "{{report_recipients}}" \
+      --arg desc "$2" \
+      '{"antithesis.debugging.session_id": $m.session_id,
+        "antithesis.debugging.input_hash": $m.input_hash,
+        "antithesis.debugging.vtime": $m.vtime,
+        "antithesis.report.recipients": $rcpt,
+        "antithesis.event_description": $desc}')
+    just _launch interactivity/v1/launch/debugging "$params"
 
+# Fetch log archives for a moment
+[group('antithesis')]
 get_archives moment:
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo true # llm guard
-    session_id=$(echo '{{moment}}' | sed -n 's/.*session_id: "\([^"]*\)".*/\1/p')
-    input_hash=$(echo '{{moment}}' | sed -n 's/.*input_hash: "\([^"]*\)".*/\1/p')
-    vtime=$(echo '{{moment}}' | sed -n 's/.*vtime: \([0-9.]*\).*/\1/p')
-    echo "Parsed values: session_id=$session_id, input_hash=$input_hash, vtime=$vtime"
-    [[ -z "$session_id" ]] && echo "Failed to parse session_id" && exit 1
-    [[ -z "$input_hash" ]] && echo "Failed to parse input_hash" && exit 1
-    [[ -z "$vtime" ]] && echo "Failed to parse vtime" && exit 1
-    date
-    curl --fail -u "brink:$ANTITHESIS_BRINK_PW" \
-      -X POST https://brink.antithesis.com/api/v1/launch/get_log_artifact \
-      -d '{"params": { "custom.session_id":"'"$session_id"'",
-          "custom.input_hash":"'"$input_hash"'",
-          "custom.vtime":"'"$vtime"'",
-          "antithesis.report.recipients":"{{report_recipients}}"
-          } }'
-
-# Build, tag, and push all images
-build-and-push: build-and-tag push
+    m=$(just moment-json "$1")
+    echo "Parsed values: $(jq -c . <<<"$m")"
+    params=$(jq -n --argjson m "$m" --arg rcpt "{{report_recipients}}" \
+      '{"custom.session_id": $m.session_id,
+        "custom.input_hash": $m.input_hash,
+        "custom.vtime": $m.vtime,
+        "antithesis.report.recipients": $rcpt}')
+    just _launch v1/launch/get_log_artifact "$params"
