@@ -2,7 +2,7 @@ set dotenv-load
 
 registry := "us-central1-docker.pkg.dev/molten-verve-216720/brink-repository"
 duration := "30"
-report_recipients := "niklas@brink.dev"
+report_recipients := env("ANTITHESIS_REPORT_RECIPIENTS", "niklas@brink.dev")
 fault_profile := "full"
 no_cache := ""
 
