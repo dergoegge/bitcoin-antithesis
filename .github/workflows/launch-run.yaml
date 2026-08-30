@@ -63,10 +63,11 @@ jobs:
     - name: Checkout the code
       uses: actions/checkout@v3
 
-    - name: Install just
+    - name: Install just and jq
       run: |
         apt update && apt install -y curl
         just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+        jq --version || (curl --proto '=https' --tlsv1.2 -sSfL https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64 -o /usr/local/bin/jq && chmod +x /usr/local/bin/jq)
 
     - name: Launch Run on Antithesis
       env:
