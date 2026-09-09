@@ -35,7 +35,13 @@ all-images:
 # Run a per-workload recipe once per workload, e.g. `just _each build-workload`
 [private]
 _each recipe:
-    @for w in {{workloads}}; do just $1 $w; done
+    #!/usr/bin/env bash
+    set -euo pipefail
+    nc='{{no_cache}}'
+    for w in {{workloads}}; do
+        just no_cache="$nc" '{{recipe}}' "$w"
+        nc=''
+    done
 
 # POST a params object to an Antithesis endpoint
 [private]
