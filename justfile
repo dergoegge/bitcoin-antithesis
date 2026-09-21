@@ -9,7 +9,7 @@ fault_profile := "full"
 no_cache := ""
 
 # Every workload with a config/docker-compose.yaml. Add new ones here only.
-workloads := "initial-rpc-workload ir-workload"
+workloads := "initial-rpc-workload ir-workload p2p-workload"
 
 _default:
     @just --list --unsorted
