@@ -12,7 +12,7 @@ import time
 
 from antithesis.lifecycle import setup_complete
 
-from p2p_workload.client import AdversaryClient, AdversaryError
+from client import AdversaryClient, AdversaryError
 from test_framework.authproxy import AuthServiceProxy
 
 DEFAULT_NODE_RPC_URL = "http://user:password@node1:18443"

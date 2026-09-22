@@ -1,5 +1,5 @@
 """Client for the adversary's request protocol, used by the drivers and the
-health checker. See `p2p_workload.server` for the methods."""
+health checker. See `server.py` for the methods."""
 
 import json
 import os

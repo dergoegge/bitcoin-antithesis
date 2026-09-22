@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Once faults stop, every handshaked connection to node1 must answer a ping
+"""Once faults stop, a connection node1 just handshaked must answer a ping
 with a pong carrying the same nonce.
 
-Two kinds of connection get pinged:
+Connections that completed their handshake before the faults are pinged too,
+but only as a sometimes check. A killed or partitioned node1 leaves the TCP
+socket open on this side: the ping sits in the send buffer and the pong times
+out, which looks the same as node1 ignoring it. There is no way to tell those
+apart, so an old connection that stays silent is not a failure.
 
-- The ones that completed the handshake before and are still open. node1 may
-  have closed some of them during the faults without us noticing yet (a FIN or
-  RST lost to a partition only surfaces once we write to the socket), so a
-  connection that turns out to be closed is excused; one that stays open and
-  silent is not.
-- A fresh one, opened now with a full handshake, retried until node1 is back.
-  This one has no excuse: node1 just completed a handshake with it, so it must
-  answer the ping. It also guarantees the property is checked even on
-  timelines where the faults took every older connection down.
+The fresh connection is. It is opened now, retried until node1 is back, and
+node1 has just completed a handshake on it, so it must answer the ping. It
+also covers timelines where the faults took every older connection down.
 """
 
 import json
@@ -22,7 +20,7 @@ import time
 from antithesis.assertions import always, sometimes
 from antithesis.random import get_random, random_choice
 
-from p2p_workload.client import AdversaryClient, AdversaryError
+from client import AdversaryClient, AdversaryError
 
 # Time for node1's closes to arrive before we start asking questions.
 SETTLE_SECS = 5.0
@@ -101,11 +99,6 @@ def main():
         if result is None:
             continue
         survivor_pongs += result["pong_received"]
-        always(
-            result["pong_received"] or result["disconnected"],
-            "A P2P connection to node1 that survived fault injection answers a ping with a pong carrying the same nonce, unless node1 closed it",
-            {"connection": connection, "ping": result},
-        )
     sometimes(
         survivor_pongs > 0,
         "A P2P connection to node1 survives fault injection and still answers pings",
@@ -143,9 +136,7 @@ def main():
         {"attempts": attempts, "seconds": elapsed, "last_result": last},
     )
     if fresh is None:
-        print(f"ping_pong: no handshake after {attempts} attempt(s) in {elapsed}s")
         return
-    print(f"ping_pong: fresh connection {fresh['id']} after {attempts} attempt(s) in {elapsed}s")
 
     result = ping(client, fresh)
     if result is None:

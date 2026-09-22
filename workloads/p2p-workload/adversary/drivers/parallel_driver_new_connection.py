@@ -13,7 +13,7 @@ import json
 from antithesis.assertions import always, sometimes
 from antithesis.random import random_choice
 
-from p2p_workload.client import AdversaryClient, AdversaryError
+from client import AdversaryClient, AdversaryError
 from test_framework.messages import (
     NODE_NETWORK,
     NODE_NETWORK_LIMITED,
@@ -48,7 +48,6 @@ def main():
         "wtxidrelay": random_choice([True, False]),
     }
     params["handshake_timeout"] = HANDSHAKE_TIMEOUT if params["send_version"] else SILENT_TIMEOUT
-    print(f"new_connection: requesting {json.dumps(params)}")
 
     client = AdversaryClient.from_env()
     try:

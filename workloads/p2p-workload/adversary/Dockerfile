@@ -1,7 +1,11 @@
 # The adversary image: Bitcoin Core's functional test framework as the P2P
-# implementation, the Antithesis Python SDK, the adversary server, the health
-# checker and the test drivers. Which of these a container runs is decided by
-# its entrypoint in docker-compose.yaml.
+# implementation, the Antithesis Python SDK, the adversary server and the test
+# drivers. The health checker is a separate program (../health_checker.py); it
+# ships in this image only because it needs the same dependencies, and its
+# container overrides the entrypoint.
+#
+# Build context is the workload directory, one level up, so the health checker
+# can be copied in from outside this folder.
 
 # The test framework is pure standard-library Python and lives in the Bitcoin
 # Core repository; take it from the same branch node1 is built from so that the
@@ -24,25 +28,26 @@ RUN pip install --no-cache-dir antithesis==0.3.1
 
 WORKDIR /adversary
 COPY --from=bitcoin-src /bitcoin/test/functional/test_framework /adversary/test_framework
-COPY p2p_workload /adversary/p2p_workload
+COPY adversary/client.py adversary/server.py /adversary/
+COPY adversary/drivers /adversary/drivers
+COPY health_checker.py /health_checker.py
 
-# `test_framework` and `p2p_workload` are importable from anywhere; logs reach
-# Antithesis as they are written.
+# `test_framework` and the adversary modules are importable from anywhere; logs
+# reach Antithesis as they are written.
 ENV PYTHONPATH=/adversary \
     PYTHONUNBUFFERED=1
 
-# Test commands, as symlinks to the driver modules, and the assertion catalog
-# so that Antithesis knows every property up front, including those a run never
-# reaches.
-RUN chmod +x /adversary/p2p_workload/drivers/*.py \
+# Test commands, as symlinks to the driver scripts. The drivers are also the
+# assertion catalog, so Antithesis knows every property up front, including
+# those a run never reaches.
+RUN chmod +x /adversary/drivers/*.py \
     && mkdir -p /opt/antithesis/test/v1/main /opt/antithesis/catalog \
-    && ln -s /adversary/p2p_workload/drivers/parallel_driver_new_connection.py \
+    && ln -s /adversary/drivers/parallel_driver_new_connection.py \
         /opt/antithesis/test/v1/main/parallel_driver_new_connection \
-    && ln -s /adversary/p2p_workload/drivers/eventually_ping_pong.py \
+    && ln -s /adversary/drivers/eventually_ping_pong.py \
         /opt/antithesis/test/v1/main/eventually_ping_pong \
-    && ln -s /adversary/p2p_workload /opt/antithesis/catalog/p2p_workload
+    && ln -s /adversary/drivers /opt/antithesis/catalog/p2p-workload
 
 EXPOSE 9000
 
-# Default: run the adversary server. The health checker overrides this.
-CMD ["python3", "-m", "p2p_workload.server"]
+CMD ["python3", "/adversary/server.py"]
