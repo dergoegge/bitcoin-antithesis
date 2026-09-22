@@ -22,6 +22,12 @@ services:
       - "-server=1"
       - "-listen=1"
       - "-listenonion=0"
+      # Leave addrman outbound selection enabled. Every destination it chooses
+      # is routed back to the adversary by the test framework's SOCKS5 server.
+      - "-proxy=10.77.0.3:9050"
+      - "-dnsseed=0"
+      - "-fixedseeds=0"
+      - "-discover=0"
       - "-loglevelalways=1"
       - "-debug"
       - "-debugexclude=libevent"
@@ -49,12 +55,17 @@ services:
       - NODE1_P2P_ADDR=node1:18444
       - ADVERSARY_PORT=9000
       - ADVERSARY_MAX_CONNECTIONS=16
+      - ADVERSARY_PROXY_PORT=9050
       - ADVERSARY_LOG_LEVEL=DEBUG
       # For the drivers, which run here and talk to the server over loopback.
       - ADVERSARY_HOST=127.0.0.1
       # Has to stay below the test run's duration, or the eventually driver is
       # stopped before it asserts anything.
       - EVENTUALLY_RETRY_BUDGET_SECS=3600
+    networks:
+      default:
+        # A numeric proxy address lets node1 start before the adversary.
+        ipv4_address: 10.77.0.3
 
   # Waits for node1 and the adversary, signals setup_complete and exits.
   health-checker:
@@ -76,3 +87,9 @@ services:
       - NODE1_RPC_URL=http://user:password@node1:18443
       - ADVERSARY_HOST=adversary
       - ADVERSARY_PORT=9000
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.77.0.0/24

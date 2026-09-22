@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir antithesis==0.3.1
 
 WORKDIR /adversary
 COPY --from=bitcoin-src /bitcoin/test/functional/test_framework /adversary/test_framework
-COPY adversary/client.py adversary/server.py /adversary/
+COPY adversary/client.py adversary/server.py adversary/peer.py adversary/proxy.py /adversary/
 COPY adversary/drivers /adversary/drivers
 COPY health_checker.py /health_checker.py
 
@@ -37,17 +37,19 @@ COPY health_checker.py /health_checker.py
 ENV PYTHONPATH=/adversary \
     PYTHONUNBUFFERED=1
 
-# Test commands, as symlinks to the driver scripts. The drivers are also the
-# assertion catalog, so Antithesis knows every property up front, including
-# those a run never reaches.
+# Catalog both driver and proxy assertions, including properties a run never
+# reaches. The proxy reports progress independently of test command lifetimes.
 RUN chmod +x /adversary/drivers/*.py \
     && mkdir -p /opt/antithesis/test/v1/main /opt/antithesis/catalog \
     && ln -s /adversary/drivers/parallel_driver_new_connection.py \
         /opt/antithesis/test/v1/main/parallel_driver_new_connection \
+    && ln -s /adversary/drivers/parallel_driver_addresses.py \
+        /opt/antithesis/test/v1/main/parallel_driver_addresses \
     && ln -s /adversary/drivers/eventually_ping_pong.py \
         /opt/antithesis/test/v1/main/eventually_ping_pong \
-    && ln -s /adversary/drivers /opt/antithesis/catalog/p2p-workload
+    && ln -s /adversary/drivers /opt/antithesis/catalog/p2p-workload \
+    && ln -s /adversary/proxy.py /opt/antithesis/catalog/p2p-proxy.py
 
-EXPOSE 9000
+EXPOSE 9000 9050
 
 CMD ["python3", "/adversary/server.py"]
