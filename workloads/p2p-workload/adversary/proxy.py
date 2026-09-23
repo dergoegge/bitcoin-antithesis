@@ -185,4 +185,4 @@ class Proxy(Socks5Server):
         with self.lock:
             peers = list(self.peers)
         with p2p_lock:
-            return {"connections": [peer.describe() for peer in peers]}
+            return [peer.describe() for peer in peers]

@@ -19,7 +19,7 @@ import time
 from antithesis.assertions import always, sometimes
 from antithesis.random import get_random, random_choice
 
-from client import AdversaryClient, AdversaryError
+import client
 
 # Time for node1's closes to arrive before we start asking questions.
 SETTLE_SECS = 5.0
@@ -36,25 +36,19 @@ RETRY_INTERVAL = 1.0
 TRANSPORTS = ["v1", "v2"]
 
 
-def ping(client, connection):
+def ping(adversary, connection):
     """Ping one connection with a fresh nonce and return the adversary's report,
-    or None if the adversary couldn't carry out the request at all."""
-    nonce = get_random()
+    or None if the connection has been forgotten since it was listed."""
     try:
-        result = client.call(
-            "ping",
-            {"id": connection["id"], "nonce": nonce, "timeout": PONG_TIMEOUT},
-            timeout=PONG_TIMEOUT + 30,
-        )
-    except (OSError, AdversaryError) as e:
-        print(f"ping_pong: connection {connection['id']}: ping request failed: {e}")
+        result = adversary.ping(connection["id"], get_random(), PONG_TIMEOUT)
+    except KeyError:
+        print(f"ping_pong: connection {connection['id']}: gone")
         return None
     print(f"ping_pong: connection {connection['id']}: {json.dumps(result)}")
     return result
 
 
 def main():
-    client = AdversaryClient()
     start = time.monotonic()
 
     time.sleep(SETTLE_SECS)
@@ -62,15 +56,16 @@ def main():
     # The adversary itself may have been hit, so give it the same patience.
     while True:
         try:
-            connections = client.call("list_connections")["connections"]
+            adversary = client.connect()
             break
-        except (OSError, AdversaryError) as e:
+        except client.UNAVAILABLE as e:
             print(f"ping_pong: adversary unavailable: {e}")
             if time.monotonic() - start > RETRY_BUDGET_SECS:
                 print("ping_pong: giving up on the adversary")
                 return
             time.sleep(RETRY_INTERVAL)
 
+    connections = adversary.list_connections()
     survivors = [c for c in connections if c["connected"] and c["handshake_complete"]]
     print(
         f"ping_pong: {len(connections)} known connection(s), "
@@ -79,7 +74,7 @@ def main():
 
     survivor_pongs = 0
     for connection in survivors:
-        result = ping(client, connection)
+        result = ping(adversary, connection)
         if result is None:
             continue
         survivor_pongs += result["pong_received"]
@@ -95,20 +90,13 @@ def main():
     attempts = 0
     while fresh is None:
         attempts += 1
-        params = {
-            "transport": random_choice(TRANSPORTS),
-            "send_version": True,
-            "handshake_timeout": HANDSHAKE_TIMEOUT,
-        }
-        try:
-            last = client.call("new_connection", params, timeout=HANDSHAKE_TIMEOUT + 30)
-            if last["handshake_complete"]:
-                fresh = last
-                break
-            print(f"ping_pong: attempt {attempts}: {json.dumps(last)}")
-        except (OSError, AdversaryError) as e:
-            last = {"error": str(e)}
-            print(f"ping_pong: attempt {attempts}: adversary unavailable: {e}")
+        last = adversary.new_connection(
+            transport=random_choice(TRANSPORTS), handshake_timeout=HANDSHAKE_TIMEOUT
+        )
+        if last["handshake_complete"]:
+            fresh = last
+            break
+        print(f"ping_pong: attempt {attempts}: {json.dumps(last)}")
         if time.monotonic() - start > RETRY_BUDGET_SECS:
             break
         time.sleep(RETRY_INTERVAL)
@@ -122,7 +110,7 @@ def main():
     if fresh is None:
         return
 
-    result = ping(client, fresh)
+    result = ping(adversary, fresh)
     if result is None:
         return
     always(

@@ -5,7 +5,7 @@ import time
 
 from antithesis.lifecycle import setup_complete
 
-from client import AdversaryClient, AdversaryError
+import client
 from test_framework.authproxy import AuthServiceProxy
 
 NODE_RPC_URL = "http://user:password@node1:18443"
@@ -25,13 +25,13 @@ def wait_for_node(rpc_url):
             time.sleep(POLL_INTERVAL)
 
 
-def wait_for_adversary(client):
+def wait_for_adversary():
     while True:
         try:
-            client.call("list_connections", timeout=10)
+            client.connect("adversary")
             print("adversary: ready")
             return
-        except (OSError, AdversaryError) as e:
+        except client.UNAVAILABLE as e:
             print(f"adversary: not ready ({e})")
             time.sleep(POLL_INTERVAL)
 
@@ -39,7 +39,7 @@ def wait_for_adversary(client):
 def main():
     print("Health checker: waiting for node1 and the adversary...")
     info = wait_for_node(NODE_RPC_URL)
-    wait_for_adversary(AdversaryClient("adversary"))
+    wait_for_adversary()
 
     setup_complete(
         {

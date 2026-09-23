@@ -1,22 +1,8 @@
 """The adversary: a server that owns P2P connections to node1.
 
-The drivers don't speak P2P themselves. They send this server a request over a
-newline-delimited JSON protocol, one object per line, and get the outcome back
-as structured data to assert on:
-
-    -> {"method": "new_connection", "params": {"transport": "v1", ...}}
-    <- {"success": true, "result": {"id": 3, "handshake_complete": true, ...}}
-    <- {"success": false, "error": "unknown connection id 42"}
-
-Methods:
-
-- ``new_connection``: open a connection to node1 and wait for the version
-  handshake (or a disconnect) for ``handshake_timeout`` seconds.
-- ``list_connections``: every connection the adversary still knows about.
-- ``ping``: send a ping with the given nonce on a connection and wait for the
-  matching pong, a disconnect, or ``timeout`` seconds.
-- ``send_addresses``: announce a batch using ``addr`` or ``addrv2``.
-- ``proxy_connections``: recent SOCKS5 destinations and the peers accepting them.
+The drivers don't speak P2P themselves. They call `Adversary`'s methods
+through a multiprocessing manager (see `client.py`) and get the outcome back as
+plain data to assert on. Connections outlive the drivers that open them.
 
 All randomness is the caller's business: the server does exactly what a
 request says, so that a driver drawing from ``antithesis.random`` decides what
@@ -27,18 +13,15 @@ is a ``python-p2p-tester`` peer: it answers node1's pings, requests announced
 inventory and otherwise stays quiet.
 """
 
-import ipaddress
-import json
 import logging
 import socket
-import socketserver
 import sys
 import threading
 import time
 
-from test_framework.messages import CAddress, NODE_P2P_V2, msg_addr, msg_addrv2, msg_ping
+from test_framework.messages import NODE_P2P_V2, msg_addr, msg_addrv2, msg_ping
 from test_framework.p2p import P2P_SERVICES, NetworkThread, p2p_lock
-from client import PORT
+from client import AUTHKEY, PORT, AdversaryManager
 from peer import Peer
 from proxy import Proxy
 
@@ -54,10 +37,6 @@ CONNECT_TIMEOUT = 10
 
 # How often a blocked request re-checks the state the event loop updates.
 POLL_INTERVAL = 0.05
-
-
-class RequestError(Exception):
-    """A request that can't be carried out as asked (bad params, unknown id)."""
 
 
 def wait_for(predicate, timeout):
@@ -77,12 +56,9 @@ def wait_for(predicate, timeout):
 
 
 class Adversary:
-    """The connection registry and the request handlers that operate on it."""
+    """The connection registry and the methods the drivers call on it."""
 
-    def __init__(self, node_host, node_port, max_connections, proxy_port):
-        self.node_host = node_host
-        self.node_port = node_port
-        self.max_connections = max_connections
+    def __init__(self):
         # Guards `peers` and `next_id`. Never held while waiting on the network.
         self.lock = threading.Lock()
         self.peers = {}
@@ -99,7 +75,7 @@ class Adversary:
         NetworkThread.network_event_loop.call_soon_threadsafe(
             NetworkThread.network_event_loop.set_exception_handler, self._loop_exception
         )
-        self.proxy = Proxy(self._register_peer, proxy_port)
+        self.proxy = Proxy(self._register_peer, PROXY_PORT)
 
     def _register_peer(self, peer):
         with self.lock:
@@ -113,68 +89,26 @@ class Adversary:
     def _loop_exception(loop, context):
         logger.warning("network thread: %s: %r", context.get("message"), context.get("exception"))
 
-    # --- request dispatch --------------------------------------------------
-
-    def dispatch(self, method, params):
-        handler = {
-            "new_connection": self.new_connection,
-            "list_connections": self.list_connections,
-            "ping": self.ping,
-            "send_addresses": self.send_addresses,
-            "proxy_connections": self.proxy_connections,
-        }.get(method)
-        if handler is None:
-            raise RequestError(f"unknown method {method!r}")
-        if not isinstance(params, dict):
-            raise RequestError("params must be an object")
-        return handler(params)
-
-    def _peer(self, params):
-        try:
-            conn_id = int(params["id"])
-        except (KeyError, TypeError, ValueError):
-            raise RequestError("missing or invalid connection id") from None
+    def _peer(self, conn_id):
+        """Raises `KeyError` for connections that were closed and forgotten."""
         with self.lock:
-            peer = self.peers.get(conn_id)
-        if peer is None:
-            raise RequestError(f"unknown connection id {conn_id}")
-        return peer
+            return self.peers[conn_id]
 
-    # --- methods -----------------------------------------------------------
-
-    def list_connections(self, params):
+    def list_connections(self):
         with self.lock:
             peers = list(self.peers.values())
         with p2p_lock:
-            return {"connections": [p.describe() for p in peers]}
+            return [p.describe() for p in peers]
 
-    def proxy_connections(self, params):
+    def proxy_connections(self):
         return self.proxy.connections()
 
-    def send_addresses(self, params):
-        peer = self._peer(params)
-        encoding = params.get("encoding", "addr")
-        if encoding not in ("addr", "addrv2"):
-            raise RequestError("encoding must be 'addr' or 'addrv2'")
-        entries = params.get("addresses")
-        if not isinstance(entries, list) or len(entries) > 1000:
-            raise RequestError("addresses must be a list of at most 1000 entries")
+    def send_addresses(self, conn_id, encoding, addresses):
+        """Announce `CAddress`es in an ``addr`` or ``addrv2`` message; returns
+        whether it was sent."""
+        peer = self._peer(conn_id)
         message = msg_addr() if encoding == "addr" else msg_addrv2()
-        try:
-            for entry in entries:
-                ip = ipaddress.ip_address(entry["address"])
-                if encoding == "addr" and ip.version != 4:
-                    raise ValueError("the framework's addr serializer supports IPv4 only")
-                address = CAddress()
-                address.net = CAddress.NET_IPV4 if ip.version == 4 else CAddress.NET_IPV6
-                address.ip = str(ip)
-                address.port = int(entry["port"])
-                address.nServices = int(entry.get("services", P2P_SERVICES))
-                address.time = int(entry.get("time", time.time()))
-                message.addrs.append(address)
-            message.serialize()  # Reject invalid fields before scheduling a send.
-        except (KeyError, TypeError, ValueError, OverflowError) as e:
-            raise RequestError(f"invalid address: {e}") from None
+        message.addrs = addresses
         sent = False
         with p2p_lock:
             # Core announces sendaddrv2 during the version handshake.
@@ -185,17 +119,12 @@ class Adversary:
                     sent = True
                 except IOError:
                     pass
-        return {"sent": sent}
+        return sent
 
-    def new_connection(self, params):
-        transport = params.get("transport", "v1")
-        if transport not in ("v1", "v2"):
-            raise RequestError(f"transport must be 'v1' or 'v2', not {transport!r}")
-        send_version = bool(params.get("send_version", True))
-        services = int(params.get("services", P2P_SERVICES))
-        support_addrv2 = bool(params.get("support_addrv2", False))
-        wtxidrelay = bool(params.get("wtxidrelay", True))
-        handshake_timeout = float(params.get("handshake_timeout", 30))
+    def new_connection(self, transport="v1", send_version=True, services=P2P_SERVICES,
+                       support_addrv2=False, wtxidrelay=True, handshake_timeout=30):
+        """Open a connection to node1 and wait for the version handshake (or a
+        disconnect) for `handshake_timeout` seconds."""
         supports_v2 = transport == "v2"
         if supports_v2:
             # What the test framework advertises when it speaks v2 itself.
@@ -236,9 +165,9 @@ class Adversary:
         # hostname has to be resolved here even though the event loop would
         # happily connect to it by name.
         try:
-            node_ip = socket.gethostbyname(self.node_host)
+            node_ip = socket.gethostbyname(NODE_HOST)
         except OSError as e:
-            return finish(f"resolving {self.node_host} failed: {e}")
+            return finish(f"resolving {NODE_HOST} failed: {e}")
 
         # Same call as `TestNode.add_p2p_connection`: `peer_connect` prepares the
         # connection (v2 handshake state, the version message to send once
@@ -248,7 +177,7 @@ class Adversary:
         # underlying error is logged by asyncio when the task is collected.
         peer.peer_connect(
             dstaddr=node_ip,
-            dstport=self.node_port,
+            dstport=NODE_PORT,
             net="regtest",
             timeout_factor=1.0,
             supports_v2_p2p=supports_v2,
@@ -263,15 +192,9 @@ class Adversary:
         wait_for(lambda: peer.handshake_complete or not peer.is_connected, handshake_timeout)
         return finish()
 
-    def ping(self, params):
-        peer = self._peer(params)
-        try:
-            nonce = int(params["nonce"])
-        except (KeyError, TypeError, ValueError):
-            raise RequestError("missing or invalid nonce") from None
-        if not 0 <= nonce < 2**64:
-            raise RequestError("nonce must fit in 64 bits")
-        timeout = float(params.get("timeout", 60))
+    def ping(self, conn_id, nonce, timeout):
+        """Ping and wait for the matching pong, a disconnect, or `timeout` seconds."""
+        peer = self._peer(conn_id)
 
         sent = False
         if peer.is_connected:
@@ -305,51 +228,11 @@ class Adversary:
 
     def _make_room(self):
         """Close the oldest connections until one more fits."""
-        while len(self.peers) >= self.max_connections:
+        while len(self.peers) >= MAX_CONNECTIONS:
             oldest = min(self.peers.values(), key=lambda peer: peer.created_at)
             oldest.peer_disconnect()
             del self.peers[oldest.conn_id]
             logger.info("connection %d: closed to make room", oldest.conn_id)
-
-
-class RequestHandler(socketserver.StreamRequestHandler):
-    """One line in, one line out, for as long as the client keeps the socket."""
-
-    def handle(self):
-        for line in self.rfile:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                request = json.loads(line)
-                if not isinstance(request, dict) or "method" not in request:
-                    raise RequestError("request must be an object with a 'method'")
-                result = self.server.adversary.dispatch(
-                    request["method"], request.get("params") or {}
-                )
-                response = {"success": True, "result": result}
-            except RequestError as e:
-                response = {"success": False, "error": str(e)}
-            except json.JSONDecodeError as e:
-                response = {"success": False, "error": f"invalid JSON: {e}"}
-            except Exception as e:
-                logger.exception("request failed: %s", line[:200])
-                response = {"success": False, "error": f"{type(e).__name__}: {e}"}
-            try:
-                self.wfile.write((json.dumps(response) + "\n").encode("utf-8"))
-                self.wfile.flush()
-            except OSError as e:
-                logger.warning("failed to send response: %s", e)
-                return
-
-
-class AdversaryServer(socketserver.ThreadingTCPServer):
-    allow_reuse_address = True
-    daemon_threads = True
-
-    def __init__(self, address, adversary):
-        super().__init__(address, RequestHandler)
-        self.adversary = adversary
 
 
 def main():
@@ -358,8 +241,9 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         stream=sys.stdout,
     )
-    adversary = Adversary(NODE_HOST, NODE_PORT, MAX_CONNECTIONS, PROXY_PORT)
-    server = AdversaryServer(("0.0.0.0", PORT), adversary)
+    adversary = Adversary()
+    AdversaryManager.register("adversary", callable=lambda: adversary)
+    server = AdversaryManager(address=("0.0.0.0", PORT), authkey=AUTHKEY).get_server()
     logger.info("listening on 0.0.0.0:%d", PORT)
     server.serve_forever()
 

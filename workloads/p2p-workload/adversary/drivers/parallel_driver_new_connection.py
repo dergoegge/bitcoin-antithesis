@@ -13,7 +13,7 @@ import json
 from antithesis.assertions import always, sometimes
 from antithesis.random import random_choice
 
-from client import AdversaryClient, AdversaryError
+import client
 from test_framework.messages import (
     NODE_NETWORK,
     NODE_NETWORK_LIMITED,
@@ -49,15 +49,13 @@ def main():
     }
     params["handshake_timeout"] = HANDSHAKE_TIMEOUT if params["send_version"] else SILENT_TIMEOUT
 
-    client = AdversaryClient()
     try:
-        result = client.call(
-            "new_connection", params, timeout=params["handshake_timeout"] + 30
-        )
-    except (OSError, AdversaryError) as e:
+        adversary = client.connect()
+    except client.UNAVAILABLE as e:
         # Without the adversary there is nothing to observe about node1.
         print(f"new_connection: adversary unavailable: {e}")
         return
+    result = adversary.new_connection(**params)
     print(f"new_connection: {json.dumps(result)}")
 
     completed = result["handshake_complete"]

@@ -11,8 +11,8 @@ import time
 
 from antithesis.random import get_random, random_choice
 
-from client import AdversaryClient, AdversaryError
-from test_framework.messages import NODE_NETWORK, NODE_P2P_V2, NODE_WITNESS
+import client
+from test_framework.messages import CAddress, NODE_NETWORK, NODE_P2P_V2, NODE_WITNESS
 
 HANDSHAKE_TIMEOUT = 30
 # Single entries, the small-batch relay boundary, and MAX_ADDR_TO_SEND=1000.
@@ -44,41 +44,42 @@ def make_addresses(encoding, count):
         port = random_choice([8333, 18444, 65535, None])
         if port is None:
             port = get_random() & 0xffff
-        addresses.append({
-            "address": str(ipaddress.ip_address(ip)),
-            "port": port,
-            "services": NODE_NETWORK | NODE_WITNESS | random_choice([0, NODE_P2P_V2]),
-            "time": int(time.time()),
-        })
+        address = CAddress()
+        address.net = CAddress.NET_IPV6 if ipv6 else CAddress.NET_IPV4
+        # Canonical form, as node1 will name it in its SOCKS5 request.
+        address.ip = str(ipaddress.ip_address(ip))
+        address.port = port
+        address.nServices = NODE_NETWORK | NODE_WITNESS | random_choice([0, NODE_P2P_V2])
+        address.time = int(time.time())
+        addresses.append(address)
     return addresses
 
 
 def main():
-    client = AdversaryClient()
     encoding = random_choice(["addr", "addrv2"])
     addresses = make_addresses(encoding, random_choice(BATCH_SIZES))
     try:
-        peer = None
-        if random_choice([True, False]):
-            connections = client.call("list_connections")["connections"]
-            eligible = [c for c in connections if c["connected"] and c["handshake_complete"]
-                        and (encoding == "addr" or c["message_count"].get("sendaddrv2", 0) > 0)]
-            if eligible:
-                peer = random_choice(eligible)
-        if peer is None:
-            peer = client.call("new_connection", {
-                "transport": random_choice(["v1", "v2"]),
-                "send_version": True,
-                "support_addrv2": True,
-                "handshake_timeout": HANDSHAKE_TIMEOUT,
-            }, timeout=HANDSHAKE_TIMEOUT + 30)
-        if peer["handshake_complete"]:
-            client.call("send_addresses", {
-                "id": peer["id"], "encoding": encoding, "addresses": addresses,
-            })
-    except (OSError, AdversaryError):
-        # Faults and eviction between selection and sending are expected.
-        pass
+        adversary = client.connect()
+    except client.UNAVAILABLE:
+        return
+    peer = None
+    if random_choice([True, False]):
+        eligible = [c for c in adversary.list_connections() if c["connected"] and c["handshake_complete"]
+                    and (encoding == "addr" or c["message_count"].get("sendaddrv2", 0) > 0)]
+        if eligible:
+            peer = random_choice(eligible)
+    if peer is None:
+        peer = adversary.new_connection(
+            transport=random_choice(["v1", "v2"]),
+            support_addrv2=True,
+            handshake_timeout=HANDSHAKE_TIMEOUT,
+        )
+    if peer["handshake_complete"]:
+        try:
+            adversary.send_addresses(peer["id"], encoding, addresses)
+        except KeyError:
+            # Evicted since it was selected.
+            pass
 
 
 if __name__ == "__main__":
