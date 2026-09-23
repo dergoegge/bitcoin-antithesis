@@ -2,8 +2,7 @@
 # implementation, the Antithesis Python SDK, the adversary server, the test
 # drivers and the health checker (whose container overrides the entrypoint).
 
-# The test framework is pure standard-library Python and lives in the Bitcoin
-# Core repository; take it from the same branch node1 is built from so that the
+# Take the test framework from the branch node1 is built from, so that the
 # message definitions match.
 FROM python:3.12-slim AS bitcoin-src
 
@@ -26,13 +25,11 @@ COPY --from=bitcoin-src /bitcoin/test/functional/test_framework /adversary/test_
 COPY *.py /adversary/
 COPY drivers /adversary/drivers
 
-# `test_framework` and the adversary modules are importable from anywhere; logs
-# reach Antithesis as they are written.
 ENV PYTHONPATH=/adversary \
     PYTHONUNBUFFERED=1
 
-# Catalog both driver and proxy assertions, including properties a run never
-# reaches. The proxy reports progress independently of test command lifetimes.
+# Catalog the driver and proxy assertions, so that ones a run never reaches
+# still show up.
 RUN chmod +x /adversary/drivers/*.py \
     && mkdir -p /opt/antithesis/test/v1/main /opt/antithesis/catalog \
     && for driver in /adversary/drivers/*.py; do \

@@ -1,16 +1,10 @@
 """The adversary: a server that owns P2P connections to node1.
 
-The drivers don't speak P2P themselves. They call `Adversary`'s methods
-through a multiprocessing manager (see `client.py`) and get the outcome back as
-plain data to assert on. Connections outlive the drivers that open them.
-
-All randomness is the caller's business: the server does exactly what a
-request says, so that a driver drawing from ``antithesis.random`` decides what
-node1 gets to see.
-
-The P2P side is Bitcoin Core's functional test framework, so every connection
-is a ``python-p2p-tester`` peer: it answers node1's pings, requests announced
-inventory and otherwise stays quiet.
+Drivers call `Adversary`'s methods through a multiprocessing manager (see
+`client.py`), so connections outlive the drivers that open them. The server
+makes no random choices of its own; the drivers draw them from
+``antithesis.random``. Every connection is a functional test framework peer: it
+answers pings, requests announced inventory and otherwise stays quiet.
 """
 
 import logging
@@ -68,10 +62,8 @@ class Adversary:
         # The thread creates the event loop once it runs; requests need it.
         while NetworkThread.network_event_loop is None or not NetworkThread.network_event_loop.is_running():
             time.sleep(POLL_INTERVAL)
-        # A connect that fails does so inside a fire-and-forget task, which
-        # asyncio would otherwise report with a full traceback once the task is
-        # collected. One line says it all; the request already reported the
-        # failure to its driver.
+        # Failed connects surface in fire-and-forget tasks; log one line instead
+        # of asyncio's traceback.
         NetworkThread.network_event_loop.call_soon_threadsafe(
             NetworkThread.network_event_loop.set_exception_handler, self._loop_exception
         )
@@ -160,20 +152,14 @@ class Adversary:
             )
             return result
 
-        # The version message carries node1's address as a raw IPv4, so the
-        # hostname has to be resolved here even though the event loop would
-        # happily connect to it by name.
+        # The version message carries node1's address as a raw IPv4.
         try:
             node_ip = socket.gethostbyname(NODE_HOST)
         except OSError as e:
             return finish(f"resolving {NODE_HOST} failed: {e}")
 
-        # Same call as `TestNode.add_p2p_connection`: `peer_connect` prepares the
-        # connection (v2 handshake state, the version message to send once
-        # connected) and returns a thunk that schedules the connect on the
-        # network thread. The connect runs as a fire-and-forget task, so a
-        # refused connection only shows up as `is_connected` staying false; the
-        # underlying error is logged by asyncio when the task is collected.
+        # As in `TestNode.add_p2p_connection`. A refused connect only shows up as
+        # `is_connected` staying false.
         peer.peer_connect(
             dstaddr=node_ip,
             dstport=NODE_PORT,
@@ -186,8 +172,6 @@ class Adversary:
         if not wait_for(lambda: peer.is_connected, CONNECT_TIMEOUT):
             return finish(f"not connected after {CONNECT_TIMEOUT}s")
 
-        # Handshake done, or the connection gone, or out of patience: all three
-        # are results, and the driver knows which one it asked for.
         wait_for(lambda: peer.handshake_complete or not peer.is_connected, handshake_timeout)
         return finish()
 
@@ -217,7 +201,7 @@ class Adversary:
         )
         return result
 
-    # --- registry housekeeping (call with `self.lock` held) ---------------
+    # Called with `self.lock` held.
 
     def _prune_settled(self):
         """Forget connections that are over, so that the registry stays bounded."""

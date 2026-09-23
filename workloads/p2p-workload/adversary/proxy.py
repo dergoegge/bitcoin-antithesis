@@ -15,7 +15,7 @@ from test_framework.socks5 import Socks5Configuration, Socks5Server
 
 logger = logging.getLogger("adversary.proxy")
 
-# Bound attribution history independently of how many driver batches run.
+# Bounds the announcement history kept for attribution.
 MAX_ANNOUNCED_ADDRESSES = 65536
 
 
@@ -76,8 +76,8 @@ class ProxyPeer(Peer):
                 "announced_via": sorted(self.announced_via)}
 
     def assert_progress(self):
-        # Called at request creation (before networking), then by network
-        # callbacks. These observations survive the announcing driver's exit.
+        # Called on every state change, so it doesn't depend on the announcing
+        # driver still running.
         details = self.describe()
         sometimes(
             self.connected_at is not None,
@@ -109,15 +109,14 @@ class Proxy(Socks5Server):
         conf.auth = True  # Core's default -proxyrandomize supplies credentials.
         conf.destinations_factory = self._destination
         super().__init__(conf)
-        # The framework queues every SOCKS5 command and error for a test to
-        # inspect. It logs them too, and nobody reads the queue, which would
-        # otherwise grow forever.
+        # Nobody reads the framework's queue of SOCKS5 commands and errors
+        # (it logs them too); don't let it grow forever.
         self.queue = SimpleNamespace(put=lambda item: None)
         self.start()
 
     def announce(self, peer, message, encoding):
-        # Hold the attribution lock across the send so a fast SOCKS request
-        # cannot overtake this record. A failed send records no announcement.
+        # Hold the lock across the send so that a fast SOCKS5 request can't
+        # overtake the record; a failed send records nothing.
         with self.lock:
             peer.send_without_ping(message)
             for address in message.addrs:

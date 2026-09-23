@@ -22,12 +22,10 @@ class Peer(P2PInterface):
         self.created_at = time.time()
         self.connected_at = None
         self.closed_at = None
-        # Set by the request that opened the connection if the connect failed.
+        # Why the connection never opened, if it didn't.
         self.connect_error = None
-        # When node1's verack arrived, i.e. the handshake completed.
         self.verack_at = None
-        # Pongs by nonce, so that concurrent pings on one connection don't
-        # confuse each other.
+        # By nonce, so that concurrent pings on one connection don't mix.
         self.pongs = {}
         self.disconnect_requested = False
 
@@ -38,10 +36,8 @@ class Peer(P2PInterface):
         self.connected_at = time.time()
 
     def peer_disconnect(self):
-        # Remember eviction even if the asynchronous connect/listen has not
-        # completed yet. Aborting only the current transport would miss it.
+        # Also covers a connect or listen still in flight (see `on_open`).
         self.disconnect_requested = True
-
         NetworkThread.network_event_loop.call_soon_threadsafe(self._close)
 
     def _close(self):
@@ -69,7 +65,7 @@ class Peer(P2PInterface):
         )
 
     def describe(self):
-        """A JSON-friendly snapshot; call with ``p2p_lock`` held."""
+        """A plain-data snapshot; call with ``p2p_lock`` held."""
         return {
             "id": self.conn_id,
             "transport": self.transport,
