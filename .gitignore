@@ -1,3 +1,4 @@
 target/
 volumes/
 .env
+__pycache__/
