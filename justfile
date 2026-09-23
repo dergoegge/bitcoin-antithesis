@@ -92,7 +92,9 @@ build-workload w:
     for svc in $(docker compose -f "$compose" config --format json | jq -r '.services | to_entries[] | select(.value.build) | .key'); do
         sets+=(--set "$svc.cache-from=$(cache $1 $svc)" --set "$svc.cache-to=$(cache $1 $svc),mode=max,image-manifest=true,oci-mediatypes=true")
     done
-    docker buildx bake -f "$compose" --load --allow network.host {{no_cache}} "${sets[@]}"
+    # Bake resolves compose build contexts against the cwd, not the compose file.
+    (cd "$(dirname "$compose")" && docker buildx bake -f docker-compose.yaml --load \
+        --allow network.host --allow fs.read='{{justfile_directory()}}' {{no_cache}} "${sets[@]}")
     docker buildx build --load {{no_cache}} -t $1-config:antithesis \
         --cache-from "$(cache $1 config)" --cache-to "$(cache $1 config),mode=max,image-manifest=true,oci-mediatypes=true" \
         workloads/$1/config/
