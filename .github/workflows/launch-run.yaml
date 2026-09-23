@@ -57,7 +57,11 @@ on:
 
 jobs:
   launch-run:
-    runs-on: self-hosted
+    runs-on:
+      - runs-on=${{ github.run_id }}
+      - cpu=2+4
+      - family=m7i+c7i
+      - image=ubuntu22-full-x64
 
     steps:
     - name: Checkout the code
@@ -65,9 +69,8 @@ jobs:
 
     - name: Install just and jq
       run: |
-        apt update && apt install -y curl
-        just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
-        jq --version || (curl --proto '=https' --tlsv1.2 -sSfL https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64 -o /usr/local/bin/jq && chmod +x /usr/local/bin/jq)
+        just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+        jq --version || (sudo curl --proto '=https' --tlsv1.2 -sSfL https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64 -o /usr/local/bin/jq && sudo chmod +x /usr/local/bin/jq)
 
     - name: Launch Run on Antithesis
       env:

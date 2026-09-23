@@ -72,7 +72,13 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on:
+      - runs-on=${{ github.run_id }}
+      - cpu=16+32
+      - family=c7i+m7i+c7a
+      - image=ubuntu22-full-x64
+      - volume=120gb:gp3
+      - extras=ecr-cache # auto-login to the ephemeral ECR registry (layer cache)
 
     steps:
     - name: Checkout the code
@@ -80,8 +86,7 @@ jobs:
 
     - name: Install just
       run: |
-        apt update && apt install -y curl
-        just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+        just --version || curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
 
     - name: Login to Antithesis Docker Registry
       uses: docker/login-action@v3
@@ -90,8 +95,16 @@ jobs:
         username: _json_key
         password: ${{ secrets.ANTITHESIS_JSON_LOGIN_KEY }}
 
+    # The docker-container driver can export layer caches to a registry; the
+    # compose files build with `network: host`, which it has to allow.
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        buildkitd-flags: --allow-insecure-entitlement network.host
+
     - name: Build and tag images
       env:
+        DOCKER_BUILD_CACHE: ${{ env.RUNS_ON_ECR_CACHE }}
         USE_DOCKER_CACHE: ${{ inputs.use_cache || false }}
         NODE1_BRANCH: ${{ inputs.node1_branch || 'master' }}
         NODE1_REPO: ${{ inputs.node1_repo || 'https://github.com/bitcoin/bitcoin.git' }}

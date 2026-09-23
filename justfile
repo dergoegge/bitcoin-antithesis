@@ -7,6 +7,9 @@ duration := "30"
 report_recipients := env("ANTITHESIS_REPORT_RECIPIENTS", "niklas@brink.dev")
 fault_profile := "full"
 no_cache := ""
+# Registry repo for BuildKit layer caches (e.g. the runs-on ECR cache in CI).
+# An env var rather than a just variable so it reaches the nested `just` calls.
+build_cache := env("DOCKER_BUILD_CACHE", "")
 
 # Every workload with a config/docker-compose.yaml. Add new ones here only.
 workloads := "initial-rpc-workload ir-workload"
@@ -75,8 +78,24 @@ moment-json moment:
 # Build every image of a single workload
 [group('images')]
 build-workload w:
-    docker compose -f workloads/$1/config/docker-compose.yaml build {{no_cache}}
-    docker build {{no_cache}} -t $1-config:antithesis workloads/$1/config/
+    #!/usr/bin/env bash
+    set -euo pipefail
+    compose=workloads/$1/config/docker-compose.yaml
+    if [[ -z '{{build_cache}}' ]]; then
+        docker compose -f "$compose" build {{no_cache}}
+        docker build {{no_cache}} -t $1-config:antithesis workloads/$1/config/
+        exit 0
+    fi
+    # ECR only accepts image manifests, hence image-manifest/oci-mediatypes on export.
+    cache() { echo "type=registry,ref={{build_cache}}:$1-$2"; }
+    sets=()
+    for svc in $(docker compose -f "$compose" config --format json | jq -r '.services | to_entries[] | select(.value.build) | .key'); do
+        sets+=(--set "$svc.cache-from=$(cache $1 $svc)" --set "$svc.cache-to=$(cache $1 $svc),mode=max,image-manifest=true,oci-mediatypes=true")
+    done
+    docker buildx bake -f "$compose" --load --allow network.host {{no_cache}} "${sets[@]}"
+    docker buildx build --load {{no_cache}} -t $1-config:antithesis \
+        --cache-from "$(cache $1 config)" --cache-to "$(cache $1 config),mode=max,image-manifest=true,oci-mediatypes=true" \
+        workloads/$1/config/
 
 # Tag every image of a single workload for the Antithesis registry
 [group('images')]
