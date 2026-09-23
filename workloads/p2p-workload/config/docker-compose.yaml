@@ -43,8 +43,7 @@ services:
     hostname: adversary
     image: p2p-workload-adversary:antithesis
     build:
-      context: ..
-      dockerfile: adversary/Dockerfile
+      context: ../adversary
       network: host
       args:
         - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
@@ -60,15 +59,9 @@ services:
   health-checker:
     container_name: health-checker
     hostname: health-checker
+    # The adversary's image, built by that service.
     image: p2p-workload-adversary:antithesis
-    build:
-      context: ..
-      dockerfile: adversary/Dockerfile
-      network: host
-      args:
-        - BITCOIN_BRANCH=${NODE1_BRANCH:-master}
-        - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
-    entrypoint: ["python3", "/health_checker.py"]
+    entrypoint: ["python3", "/adversary/health_checker.py"]
     depends_on:
       - node1
       - adversary
