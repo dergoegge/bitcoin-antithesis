@@ -54,7 +54,7 @@ def make_addresses(encoding, count):
 
 
 def main():
-    client = AdversaryClient.from_env()
+    client = AdversaryClient()
     encoding = random_choice(["addr", "addrv2"])
     addresses = make_addresses(encoding, random_choice(BATCH_SIZES))
     try:

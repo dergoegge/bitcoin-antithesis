@@ -27,21 +27,11 @@ node1 gets to see.
 The P2P side is Bitcoin Core's functional test framework, so every connection
 is a ``python-p2p-tester`` peer: it answers node1's pings, requests announced
 inventory and otherwise stays quiet.
-
-Configuration (environment):
-
-- ``NODE1_P2P_ADDR``: ``host:port`` of node1's P2P listener (``node1:18444``).
-- ``ADVERSARY_PORT``: port this server listens on (``9000``).
-- ``ADVERSARY_MAX_CONNECTIONS``: connections kept at once (``16``). When a new
-  one doesn't fit, the oldest one is closed to make room.
-- ``ADVERSARY_LOG_LEVEL``: ``DEBUG`` logs every P2P message sent or received.
-- ``ADVERSARY_PROXY_PORT``: SOCKS5 listener for node1 (``9050``).
 """
 
 import ipaddress
 import json
 import logging
-import os
 import socket
 import socketserver
 import sys
@@ -50,14 +40,17 @@ import time
 
 from test_framework.messages import CAddress, NODE_P2P_V2, msg_addr, msg_addrv2, msg_ping
 from test_framework.p2p import P2P_SERVICES, NetworkThread, p2p_lock
+from client import PORT
 from peer import Peer
 from proxy import Proxy
 
 logger = logging.getLogger("adversary")
 
-DEFAULT_NODE_P2P_ADDR = "node1:18444"
-DEFAULT_PORT = 9000
-DEFAULT_MAX_CONNECTIONS = 16
+NODE_HOST = "node1"
+NODE_PORT = 18444
+PROXY_PORT = 9050
+# When a new connection doesn't fit, the oldest one is closed to make room.
+MAX_CONNECTIONS = 16
 
 # How often a blocked request re-checks the state the event loop updates.
 POLL_INTERVAL = 0.05
@@ -86,7 +79,7 @@ def wait_for(predicate, timeout):
 class Adversary:
     """The connection registry and the request handlers that operate on it."""
 
-    def __init__(self, node_host, node_port, max_connections, proxy_port=9050):
+    def __init__(self, node_host, node_port, max_connections, proxy_port):
         self.node_host = node_host
         self.node_port = node_port
         self.max_connections = max_connections
@@ -423,35 +416,15 @@ class AdversaryServer(socketserver.ThreadingTCPServer):
         self.adversary = adversary
 
 
-def parse_host_port(value, default_port):
-    host, sep, port = value.rpartition(":")
-    if not sep:
-        return value, default_port
-    return host, int(port)
-
-
 def main():
     logging.basicConfig(
-        level=os.environ.get("ADVERSARY_LOG_LEVEL", "DEBUG").upper(),
+        level=logging.DEBUG,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         stream=sys.stdout,
     )
-    node_host, node_port = parse_host_port(
-        os.environ.get("NODE1_P2P_ADDR", DEFAULT_NODE_P2P_ADDR), 18444
-    )
-    port = int(os.environ.get("ADVERSARY_PORT", DEFAULT_PORT))
-    max_connections = int(os.environ.get("ADVERSARY_MAX_CONNECTIONS", DEFAULT_MAX_CONNECTIONS))
-    proxy_port = int(os.environ.get("ADVERSARY_PROXY_PORT", 9050))
-
-    adversary = Adversary(node_host, node_port, max_connections, proxy_port)
-    server = AdversaryServer(("0.0.0.0", port), adversary)
-    logger.info(
-        "listening on 0.0.0.0:%d, node1 at %s:%d, keeping up to %d connections",
-        port,
-        node_host,
-        node_port,
-        max_connections,
-    )
+    adversary = Adversary(NODE_HOST, NODE_PORT, MAX_CONNECTIONS, PROXY_PORT)
+    server = AdversaryServer(("0.0.0.0", PORT), adversary)
+    logger.info("listening on 0.0.0.0:%d", PORT)
     server.serve_forever()
 
 

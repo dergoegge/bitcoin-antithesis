@@ -49,7 +49,7 @@ def main():
     }
     params["handshake_timeout"] = HANDSHAKE_TIMEOUT if params["send_version"] else SILENT_TIMEOUT
 
-    client = AdversaryClient.from_env()
+    client = AdversaryClient()
     try:
         result = client.call(
             "new_connection", params, timeout=params["handshake_timeout"] + 30

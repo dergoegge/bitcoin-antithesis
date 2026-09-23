@@ -51,17 +51,6 @@ services:
         - BITCOIN_REPO=${NODE1_REPO:-https://github.com/bitcoin/bitcoin.git}
     depends_on:
       - node1
-    environment:
-      - NODE1_P2P_ADDR=node1:18444
-      - ADVERSARY_PORT=9000
-      - ADVERSARY_MAX_CONNECTIONS=16
-      - ADVERSARY_PROXY_PORT=9050
-      - ADVERSARY_LOG_LEVEL=DEBUG
-      # For the drivers, which run here and talk to the server over loopback.
-      - ADVERSARY_HOST=127.0.0.1
-      # Has to stay below the test run's duration, or the eventually driver is
-      # stopped before it asserts anything.
-      - EVENTUALLY_RETRY_BUDGET_SECS=3600
     networks:
       default:
         # A numeric proxy address lets node1 start before the adversary.
@@ -83,10 +72,6 @@ services:
     depends_on:
       - node1
       - adversary
-    environment:
-      - NODE1_RPC_URL=http://user:password@node1:18443
-      - ADVERSARY_HOST=adversary
-      - ADVERSARY_PORT=9000
 
 networks:
   default:

@@ -2,11 +2,11 @@
 health checker. See `server.py` for the methods."""
 
 import json
-import os
 import socket
 
+# The drivers run inside the adversary container.
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 9000
+PORT = 9000
 
 
 class AdversaryError(Exception):
@@ -14,18 +14,8 @@ class AdversaryError(Exception):
 
 
 class AdversaryClient:
-    def __init__(self, host, port):
+    def __init__(self, host=DEFAULT_HOST):
         self.host = host
-        self.port = port
-
-    @classmethod
-    def from_env(cls):
-        """``ADVERSARY_HOST``/``ADVERSARY_PORT``; the drivers run inside the
-        adversary container, so the default is localhost."""
-        return cls(
-            os.environ.get("ADVERSARY_HOST", DEFAULT_HOST),
-            int(os.environ.get("ADVERSARY_PORT", DEFAULT_PORT)),
-        )
 
     def call(self, method, params=None, *, timeout=60.0):
         """Send one request and return its ``result``.
@@ -37,7 +27,7 @@ class AdversaryClient:
         ``timeout`` here should leave room for those.
         """
         request = json.dumps({"method": method, "params": params or {}}) + "\n"
-        with socket.create_connection((self.host, self.port), timeout=timeout) as sock:
+        with socket.create_connection((self.host, PORT), timeout=timeout) as sock:
             sock.sendall(request.encode("utf-8"))
             with sock.makefile("r", encoding="utf-8") as reader:
                 line = reader.readline()

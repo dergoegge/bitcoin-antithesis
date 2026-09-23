@@ -99,7 +99,7 @@ class ProxyPeer(Peer):
 
 
 class Proxy(Socks5Server):
-    def __init__(self, register_peer, port=9050):
+    def __init__(self, register_peer, port):
         self.register_peer = register_peer
         self.lock = threading.Lock()
         self.peers = deque(maxlen=256)

@@ -1,13 +1,6 @@
 """Wait for node1 to answer an RPC and for the adversary to answer a request,
-then tell Antithesis that setup is complete.
+then tell Antithesis that setup is complete."""
 
-Configuration (environment):
-
-- ``NODE1_RPC_URL``: ``http://user:password@node1:18443``.
-- ``ADVERSARY_HOST``/``ADVERSARY_PORT``: where the adversary listens.
-"""
-
-import os
 import time
 
 from antithesis.lifecycle import setup_complete
@@ -15,7 +8,7 @@ from antithesis.lifecycle import setup_complete
 from client import AdversaryClient, AdversaryError
 from test_framework.authproxy import AuthServiceProxy
 
-DEFAULT_NODE_RPC_URL = "http://user:password@node1:18443"
+NODE_RPC_URL = "http://user:password@node1:18443"
 POLL_INTERVAL = 1.0
 
 
@@ -45,8 +38,8 @@ def wait_for_adversary(client):
 
 def main():
     print("Health checker: waiting for node1 and the adversary...")
-    info = wait_for_node(os.environ.get("NODE1_RPC_URL", DEFAULT_NODE_RPC_URL))
-    status = wait_for_adversary(AdversaryClient.from_env())
+    info = wait_for_node(NODE_RPC_URL)
+    status = wait_for_adversary(AdversaryClient("adversary"))
 
     setup_complete(
         {

@@ -14,7 +14,6 @@ also covers timelines where the faults took every older connection down.
 """
 
 import json
-import os
 import time
 
 from antithesis.assertions import always, sometimes
@@ -27,28 +26,14 @@ SETTLE_SECS = 5.0
 # How long a connection gets to answer a ping.
 PONG_TIMEOUT = 60.0
 HANDSHAKE_TIMEOUT = 30.0
-# Default of `retry_budget`.
-DEFAULT_RETRY_BUDGET_SECS = 60 * 60
+# Total time node1 gets to come back and complete a handshake. A driver that
+# outlives the test run is stopped before it asserts anything, leaving the
+# property unchecked rather than failed, so this has to stay well below the
+# run's duration.
+RETRY_BUDGET_SECS = 5 * 60
 RETRY_INTERVAL = 1.0
 
 TRANSPORTS = ["v1", "v2"]
-
-
-def retry_budget():
-    """Total time node1 gets to come back and complete a handshake.
-
-    A driver that outlives the test run is stopped before it asserts anything,
-    leaving the property unchecked rather than failed, so the budget has to
-    stay below the run's duration (``EVENTUALLY_RETRY_BUDGET_SECS``).
-    """
-    value = os.environ.get("EVENTUALLY_RETRY_BUDGET_SECS")
-    if value is None:
-        return DEFAULT_RETRY_BUDGET_SECS
-    try:
-        return float(value)
-    except ValueError:
-        print(f"ping_pong: ignoring EVENTUALLY_RETRY_BUDGET_SECS={value!r}")
-        return DEFAULT_RETRY_BUDGET_SECS
 
 
 def ping(client, connection):
@@ -69,8 +54,7 @@ def ping(client, connection):
 
 
 def main():
-    client = AdversaryClient.from_env()
-    budget = retry_budget()
+    client = AdversaryClient()
     start = time.monotonic()
 
     time.sleep(SETTLE_SECS)
@@ -82,7 +66,7 @@ def main():
             break
         except (OSError, AdversaryError) as e:
             print(f"ping_pong: adversary unavailable: {e}")
-            if time.monotonic() - start > budget:
+            if time.monotonic() - start > RETRY_BUDGET_SECS:
                 print("ping_pong: giving up on the adversary")
                 return
             time.sleep(RETRY_INTERVAL)
@@ -125,7 +109,7 @@ def main():
         except (OSError, AdversaryError) as e:
             last = {"error": str(e)}
             print(f"ping_pong: attempt {attempts}: adversary unavailable: {e}")
-        if time.monotonic() - start > budget:
+        if time.monotonic() - start > RETRY_BUDGET_SECS:
             break
         time.sleep(RETRY_INTERVAL)
 
