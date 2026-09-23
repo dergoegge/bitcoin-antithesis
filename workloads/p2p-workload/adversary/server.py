@@ -10,13 +10,11 @@ as structured data to assert on:
 
 Methods:
 
-- ``status``: counts of connections, for the health checker.
 - ``new_connection``: open a connection to node1 and wait for the version
   handshake (or a disconnect) for ``handshake_timeout`` seconds.
 - ``list_connections``: every connection the adversary still knows about.
 - ``ping``: send a ping with the given nonce on a connection and wait for the
   matching pong, a disconnect, or ``timeout`` seconds.
-- ``disconnect``: close a connection and forget about it.
 - ``send_addresses``: announce a batch using ``addr`` or ``addrv2``.
 - ``proxy_connections``: recent SOCKS5 destinations and the peers accepting them.
 
@@ -52,6 +50,8 @@ PROXY_PORT = 9050
 # When a new connection doesn't fit, the oldest one is closed to make room.
 MAX_CONNECTIONS = 16
 
+CONNECT_TIMEOUT = 10
+
 # How often a blocked request re-checks the state the event loop updates.
 POLL_INTERVAL = 0.05
 
@@ -83,7 +83,6 @@ class Adversary:
         self.node_host = node_host
         self.node_port = node_port
         self.max_connections = max_connections
-        self.started_at = time.time()
         # Guards `peers` and `next_id`. Never held while waiting on the network.
         self.lock = threading.Lock()
         self.peers = {}
@@ -118,11 +117,9 @@ class Adversary:
 
     def dispatch(self, method, params):
         handler = {
-            "status": self.status,
             "new_connection": self.new_connection,
             "list_connections": self.list_connections,
             "ping": self.ping,
-            "disconnect": self.disconnect,
             "send_addresses": self.send_addresses,
             "proxy_connections": self.proxy_connections,
         }.get(method)
@@ -144,22 +141,6 @@ class Adversary:
         return peer
 
     # --- methods -----------------------------------------------------------
-
-    def status(self, params):
-        with self.lock:
-            peers = list(self.peers.values())
-        with p2p_lock:
-            connected = [p for p in peers if p.is_connected]
-            handshaked = [p for p in connected if p.handshake_complete]
-        return {
-            "node": f"{self.node_host}:{self.node_port}",
-            "max_connections": self.max_connections,
-            "connections": len(peers),
-            "connected": len(connected),
-            "handshaked": len(handshaked),
-            "proxy_port": self.proxy.conf.addr[1],
-            "uptime": round(time.time() - self.started_at, 3),
-        }
 
     def list_connections(self, params):
         with self.lock:
@@ -204,7 +185,7 @@ class Adversary:
                     sent = True
                 except IOError:
                     pass
-        return {"id": peer.conn_id, "encoding": encoding, "count": len(entries), "sent": sent}
+        return {"sent": sent}
 
     def new_connection(self, params):
         transport = params.get("transport", "v1")
@@ -214,26 +195,15 @@ class Adversary:
         services = int(params.get("services", P2P_SERVICES))
         support_addrv2 = bool(params.get("support_addrv2", False))
         wtxidrelay = bool(params.get("wtxidrelay", True))
-        connect_timeout = float(params.get("connect_timeout", 10))
         handshake_timeout = float(params.get("handshake_timeout", 30))
         supports_v2 = transport == "v2"
         if supports_v2:
             # What the test framework advertises when it speaks v2 itself.
             services |= NODE_P2P_V2
-        requested = {
-            "transport": transport,
-            "send_version": send_version,
-            "services": services,
-            "support_addrv2": support_addrv2,
-            "wtxidrelay": wtxidrelay,
-            "connect_timeout": connect_timeout,
-            "handshake_timeout": handshake_timeout,
-        }
-        started = time.monotonic()
 
         with self.lock:
             self._prune_settled()
-            evicted = self._make_room()
+            self._make_room()
             conn_id = self.next_id
             self.next_id += 1
             peer = Peer(
@@ -250,13 +220,6 @@ class Adversary:
                 peer.connect_error = error
             with p2p_lock:
                 result = peer.describe()
-            result.update(
-                {
-                    "requested": requested,
-                    "evicted": evicted,
-                    "elapsed": round(time.monotonic() - started, 3),
-                }
-            )
             logger.info(
                 "connection %d: %s transport=%s sent_version=%s connected=%s handshake_complete=%s error=%s",
                 conn_id,
@@ -292,8 +255,8 @@ class Adversary:
             services=services,
             send_version=send_version,
         )()
-        if not wait_for(lambda: peer.is_connected, connect_timeout):
-            return finish(f"not connected after {connect_timeout}s")
+        if not wait_for(lambda: peer.is_connected, CONNECT_TIMEOUT):
+            return finish(f"not connected after {CONNECT_TIMEOUT}s")
 
         # Handshake done, or the connection gone, or out of patience: all three
         # are results, and the driver knows which one it asked for.
@@ -309,7 +272,6 @@ class Adversary:
         if not 0 <= nonce < 2**64:
             raise RequestError("nonce must fit in 64 bits")
         timeout = float(params.get("timeout", 60))
-        started = time.monotonic()
 
         sent = False
         if peer.is_connected:
@@ -323,38 +285,15 @@ class Adversary:
             wait_for(lambda: nonce in peer.pongs or not peer.is_connected, timeout)
 
         with p2p_lock:
-            result = peer.describe()
-            pong_at = peer.pongs.get(nonce)
-        result.update(
-            {
-                "nonce": nonce,
-                "sent": sent,
-                "pong_received": pong_at is not None,
-                "pong_at": pong_at,
-                # Whether the connection is gone now; a pong may still have made
-                # it through first.
-                "disconnected": not peer.is_connected,
-                "timed_out": sent and pong_at is None and peer.is_connected,
-                "elapsed": round(time.monotonic() - started, 3),
-            }
-        )
+            result = {**peer.describe(), "pong_received": nonce in peer.pongs}
         logger.info(
-            "connection %d: ping nonce=%d sent=%s pong_received=%s disconnected=%s",
+            "connection %d: ping nonce=%d sent=%s pong_received=%s",
             peer.conn_id,
             nonce,
             sent,
             result["pong_received"],
-            result["disconnected"],
         )
         return result
-
-    def disconnect(self, params):
-        peer = self._peer(params)
-        peer.peer_disconnect()
-        with self.lock:
-            self.peers.pop(peer.conn_id, None)
-        with p2p_lock:
-            return peer.describe()
 
     # --- registry housekeeping (call with `self.lock` held) ---------------
 
@@ -365,15 +304,12 @@ class Adversary:
             del self.peers[conn_id]
 
     def _make_room(self):
-        """Close the oldest connections until one more fits; returns their ids."""
-        evicted = []
+        """Close the oldest connections until one more fits."""
         while len(self.peers) >= self.max_connections:
             oldest = min(self.peers.values(), key=lambda peer: peer.created_at)
             oldest.peer_disconnect()
             del self.peers[oldest.conn_id]
-            evicted.append(oldest.conn_id)
             logger.info("connection %d: closed to make room", oldest.conn_id)
-        return evicted
 
 
 class RequestHandler(socketserver.StreamRequestHandler):

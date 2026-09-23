@@ -28,9 +28,9 @@ def wait_for_node(rpc_url):
 def wait_for_adversary(client):
     while True:
         try:
-            status = client.call("status", timeout=10)
-            print(f"adversary: ready ({status})")
-            return status
+            client.call("list_connections", timeout=10)
+            print("adversary: ready")
+            return
         except (OSError, AdversaryError) as e:
             print(f"adversary: not ready ({e})")
             time.sleep(POLL_INTERVAL)
@@ -39,14 +39,13 @@ def wait_for_adversary(client):
 def main():
     print("Health checker: waiting for node1 and the adversary...")
     info = wait_for_node(NODE_RPC_URL)
-    status = wait_for_adversary(AdversaryClient("adversary"))
+    wait_for_adversary(AdversaryClient("adversary"))
 
     setup_complete(
         {
             "message": "node1 answers RPCs and the adversary is listening",
             "chain": info["chain"],
             "chain_height": info["blocks"],
-            "adversary": status,
         }
     )
     print("Health checker: setup_complete signaled, exiting")
