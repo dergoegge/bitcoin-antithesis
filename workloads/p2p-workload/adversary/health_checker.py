@@ -8,7 +8,6 @@ from antithesis.lifecycle import setup_complete
 import client
 from test_framework.authproxy import AuthServiceProxy
 
-NODE_RPC_URL = "http://user:password@node1:18443"
 POLL_INTERVAL = 1.0
 
 
@@ -38,7 +37,7 @@ def wait_for_adversary():
 
 def main():
     print("Health checker: waiting for node1 and the adversary...")
-    info = wait_for_node(NODE_RPC_URL)
+    info = wait_for_node(client.NODE_RPC_URL)
     wait_for_adversary()
 
     setup_complete(

@@ -26,11 +26,6 @@ SETTLE_SECS = 5.0
 # How long a connection gets to answer a ping.
 PONG_TIMEOUT = 60.0
 HANDSHAKE_TIMEOUT = 30.0
-# Total time node1 gets to come back and complete a handshake. A driver that
-# outlives the test run is stopped before it asserts anything, leaving the
-# property unchecked rather than failed, so this has to stay well below the
-# run's duration.
-RETRY_BUDGET_SECS = 5 * 60
 RETRY_INTERVAL = 1.0
 
 
@@ -48,7 +43,7 @@ def ping(adversary, connection):
 
 def main():
     start = time.monotonic()
-    deadline = start + RETRY_BUDGET_SECS
+    deadline = start + client.EVENTUALLY_BUDGET_SECS
 
     time.sleep(SETTLE_SECS)
 

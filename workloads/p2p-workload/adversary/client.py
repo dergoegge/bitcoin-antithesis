@@ -11,6 +11,14 @@ UNAVAILABLE = (OSError, EOFError)
 
 TRANSPORTS = ["v1", "v2"]
 
+NODE_RPC_URL = "http://user:password@node1:18443"
+
+# How long an eventually driver gives node1 to recover. A driver that outlives
+# the test run is stopped before it asserts anything, leaving the property
+# unchecked rather than failed, so this has to stay well below the run's
+# duration.
+EVENTUALLY_BUDGET_SECS = 5 * 60
+
 
 class AdversaryManager(BaseManager):
     pass
