@@ -27,7 +27,6 @@ HANDSHAKE_TIMEOUT = 30.0
 # leaves node1 a moment to (wrongly) speak first.
 SILENT_TIMEOUT = 5.0
 
-TRANSPORTS = ["v1", "v2"]
 # `random_choice` is uniform, so duplicates are weights: mostly do the
 # handshake properly, sometimes connect and say nothing.
 SEND_VERSION = [True, True, True, False]
@@ -41,7 +40,7 @@ SERVICES = [
 
 def main():
     params = {
-        "transport": random_choice(TRANSPORTS),
+        "transport": random_choice(client.TRANSPORTS),
         "send_version": random_choice(SEND_VERSION),
         "services": random_choice(SERVICES),
         "support_addrv2": random_choice([True, False]),

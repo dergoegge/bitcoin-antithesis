@@ -9,6 +9,8 @@ AUTHKEY = b"adversary"
 # What connecting to (or calling) an unreachable adversary raises.
 UNAVAILABLE = (OSError, EOFError)
 
+TRANSPORTS = ["v1", "v2"]
+
 
 class AdversaryManager(BaseManager):
     pass

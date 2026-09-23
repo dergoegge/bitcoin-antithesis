@@ -70,7 +70,7 @@ def main():
             peer = random_choice(eligible)
     if peer is None:
         peer = adversary.new_connection(
-            transport=random_choice(["v1", "v2"]),
+            transport=random_choice(client.TRANSPORTS),
             support_addrv2=True,
             handshake_timeout=HANDSHAKE_TIMEOUT,
         )

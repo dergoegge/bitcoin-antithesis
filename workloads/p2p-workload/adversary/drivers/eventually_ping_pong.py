@@ -33,8 +33,6 @@ HANDSHAKE_TIMEOUT = 30.0
 RETRY_BUDGET_SECS = 5 * 60
 RETRY_INTERVAL = 1.0
 
-TRANSPORTS = ["v1", "v2"]
-
 
 def ping(adversary, connection):
     """Ping one connection with a fresh nonce and return the adversary's report,
@@ -50,18 +48,18 @@ def ping(adversary, connection):
 
 def main():
     start = time.monotonic()
+    deadline = start + RETRY_BUDGET_SECS
 
     time.sleep(SETTLE_SECS)
 
-    # The adversary itself may have been hit, so give it the same patience.
+    # A restarted adversary container may not be listening yet.
     while True:
         try:
             adversary = client.connect()
             break
         except client.UNAVAILABLE as e:
             print(f"ping_pong: adversary unavailable: {e}")
-            if time.monotonic() - start > RETRY_BUDGET_SECS:
-                print("ping_pong: giving up on the adversary")
+            if time.monotonic() > deadline:
                 return
             time.sleep(RETRY_INTERVAL)
 
@@ -72,12 +70,8 @@ def main():
         f"{len(survivors)} handshaked and still open"
     )
 
-    survivor_pongs = 0
-    for connection in survivors:
-        result = ping(adversary, connection)
-        if result is None:
-            continue
-        survivor_pongs += result["pong_received"]
+    results = [ping(adversary, c) for c in survivors]
+    survivor_pongs = sum(r["pong_received"] for r in results if r is not None)
     sometimes(
         survivor_pongs > 0,
         "A P2P connection to node1 survives fault injection and still answers pings",
@@ -85,29 +79,23 @@ def main():
     )
 
     # Now a fresh connection, for as long as it takes node1 to come back.
-    fresh = None
-    last = None
     attempts = 0
-    while fresh is None:
+    while True:
         attempts += 1
-        last = adversary.new_connection(
-            transport=random_choice(TRANSPORTS), handshake_timeout=HANDSHAKE_TIMEOUT
+        fresh = adversary.new_connection(
+            transport=random_choice(client.TRANSPORTS), handshake_timeout=HANDSHAKE_TIMEOUT
         )
-        if last["handshake_complete"]:
-            fresh = last
+        if fresh["handshake_complete"] or time.monotonic() > deadline:
             break
-        print(f"ping_pong: attempt {attempts}: {json.dumps(last)}")
-        if time.monotonic() - start > RETRY_BUDGET_SECS:
-            break
+        print(f"ping_pong: attempt {attempts}: {json.dumps(fresh)}")
         time.sleep(RETRY_INTERVAL)
 
-    elapsed = round(time.monotonic() - start, 1)
     always(
-        fresh is not None,
+        fresh["handshake_complete"],
         "node1 completes a version handshake with a new peer once faults stop",
-        {"attempts": attempts, "seconds": elapsed, "last_result": last},
+        {"attempts": attempts, "seconds": round(time.monotonic() - start, 1), "last_result": fresh},
     )
-    if fresh is None:
+    if not fresh["handshake_complete"]:
         return
 
     result = ping(adversary, fresh)
