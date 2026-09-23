@@ -23,7 +23,7 @@ from test_framework.messages import NODE_P2P_V2, msg_addr, msg_addrv2, msg_ping
 from test_framework.p2p import P2P_SERVICES, NetworkThread, p2p_lock
 from client import AUTHKEY, PORT, AdversaryManager
 from peer import Peer
-from proxy import Proxy
+from proxy import Proxy, ProxyPeer
 
 logger = logging.getLogger("adversary")
 
@@ -78,6 +78,7 @@ class Adversary:
         self.proxy = Proxy(self._register_peer, PROXY_PORT)
 
     def _register_peer(self, peer):
+        """Give `peer` the next connection id and keep it."""
         with self.lock:
             self._prune_settled()
             self._make_room()
@@ -94,14 +95,18 @@ class Adversary:
         with self.lock:
             return self.peers[conn_id]
 
-    def list_connections(self):
+    def _describe(self, kind):
         with self.lock:
-            peers = list(self.peers.values())
+            peers = [p for p in self.peers.values() if isinstance(p, kind)]
         with p2p_lock:
             return [p.describe() for p in peers]
 
+    def list_connections(self):
+        return self._describe(Peer)
+
     def proxy_connections(self):
-        return self.proxy.connections()
+        """The connections node1 opened through the SOCKS5 proxy."""
+        return self._describe(ProxyPeer)
 
     def send_addresses(self, conn_id, encoding, addresses):
         """Announce `CAddress`es in an ``addr`` or ``addrv2`` message; returns
@@ -130,19 +135,13 @@ class Adversary:
             # What the test framework advertises when it speaks v2 itself.
             services |= NODE_P2P_V2
 
-        with self.lock:
-            self._prune_settled()
-            self._make_room()
-            conn_id = self.next_id
-            self.next_id += 1
-            peer = Peer(
-                conn_id,
-                transport=transport,
-                send_version=send_version,
-                support_addrv2=support_addrv2,
-                wtxidrelay=wtxidrelay,
-            )
-            self.peers[conn_id] = peer
+        peer = Peer(
+            transport=transport,
+            send_version=send_version,
+            support_addrv2=support_addrv2,
+            wtxidrelay=wtxidrelay,
+        )
+        self._register_peer(peer)
 
         def finish(error=None):
             if error is not None:
@@ -151,7 +150,7 @@ class Adversary:
                 result = peer.describe()
             logger.info(
                 "connection %d: %s transport=%s sent_version=%s connected=%s handshake_complete=%s error=%s",
-                conn_id,
+                peer.conn_id,
                 "opened" if result["connected"] else "failed",
                 transport,
                 send_version,

@@ -13,9 +13,10 @@ class Peer(P2PInterface):
     are single assignments and read without it, like ``is_connected``).
     """
 
-    def __init__(self, conn_id, *, transport, send_version, **kwargs):
+    def __init__(self, *, transport, send_version, **kwargs):
         super().__init__(**kwargs)
-        self.conn_id = conn_id
+        # Assigned when the adversary registers the connection.
+        self.conn_id = None
         self.transport = transport
         self.sent_version = send_version
         self.created_at = time.time()
@@ -46,7 +47,6 @@ class Peer(P2PInterface):
     def _close(self):
         if self._transport is not None:
             self._transport.abort()
-        self.closed_at = time.time()
 
     def on_close(self):
         self.closed_at = time.time()

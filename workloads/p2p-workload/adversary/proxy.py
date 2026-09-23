@@ -1,16 +1,16 @@
 """Redirect Core's SOCKS5 requests to local P2P peers and assert on progress."""
 
 import asyncio
-from collections import OrderedDict, deque
+from collections import OrderedDict
 import logging
-import queue
 import threading
+from types import SimpleNamespace
 
 from antithesis.assertions import sometimes
 
 from peer import Peer
 from test_framework.messages import NODE_P2P_V2
-from test_framework.p2p import NetworkThread, P2P_SERVICES, p2p_lock
+from test_framework.p2p import NetworkThread, P2P_SERVICES
 from test_framework.socks5 import Socks5Configuration, Socks5Server
 
 logger = logging.getLogger("adversary.proxy")
@@ -21,7 +21,7 @@ MAX_ANNOUNCED_ADDRESSES = 65536
 
 class ProxyPeer(Peer):
     def __init__(self, address, port, announced_via=()):
-        super().__init__(0, transport="auto", send_version=True, support_addrv2=True)
+        super().__init__(transport="auto", send_version=True, support_addrv2=True)
         self.proxy_destination = {"address": address, "port": port}
         self.announced_via = frozenset(announced_via)
         self.listener = None
@@ -102,7 +102,6 @@ class Proxy(Socks5Server):
     def __init__(self, register_peer, port):
         self.register_peer = register_peer
         self.lock = threading.Lock()
-        self.peers = deque(maxlen=256)
         self.announcements = OrderedDict()
         conf = Socks5Configuration()
         conf.addr = ("0.0.0.0", port)
@@ -110,6 +109,10 @@ class Proxy(Socks5Server):
         conf.auth = True  # Core's default -proxyrandomize supplies credentials.
         conf.destinations_factory = self._destination
         super().__init__(conf)
+        # The framework queues every SOCKS5 command and error for a test to
+        # inspect. It logs them too, and nobody reads the queue, which would
+        # otherwise grow forever.
+        self.queue = SimpleNamespace(put=lambda item: None)
         self.start()
 
     def announce(self, peer, message, encoding):
@@ -148,21 +151,9 @@ class Proxy(Socks5Server):
         peer.listen_timeout = loop.call_later(10, expired)
         return {"actual_to_addr": "127.0.0.1", "actual_to_port": port}
 
-    def _drain_queue(self):
-        # The framework also logs these commands/errors. Keep its queue from
-        # growing indefinitely alongside our bounded connection history.
-        while True:
-            try:
-                self.queue.get_nowait()
-            except queue.Empty:
-                break
-
-    def _destination(self, address, port, proxy_client=None):
-        # Recent framework versions also pass the SOCKS client's endpoint.
-        self._drain_queue()
+    def _destination(self, address, port, _client):
         with self.lock:
             peer = ProxyPeer(address, port, self.announcements.get((address, port), ()))
-            self.peers.append(peer)
         self.register_peer(peer)
         peer.assert_progress()
         future = asyncio.run_coroutine_threadsafe(self._listen(peer), NetworkThread.network_event_loop)
@@ -179,10 +170,3 @@ class Proxy(Socks5Server):
         logger.info("proxy connection %d: %s:%d -> %s:%d", peer.conn_id,
                     address, port, destination["actual_to_addr"], destination["actual_to_port"])
         return destination
-
-    def connections(self):
-        self._drain_queue()
-        with self.lock:
-            peers = list(self.peers)
-        with p2p_lock:
-            return [peer.describe() for peer in peers]
